@@ -17,6 +17,75 @@ permalink: /kart/
   <div id="selected-letters"></div>
 </div>
 
+<!-- Page-local styles (override gently without touching main.css) -->
+<style>
+  /* layout */
+  .map-container { max-width: 1100px; margin: 0 auto; }
+  #selected-letters { margin-top: 1rem; }
+  .letter-list {
+    /* give researchers a large, comfy reading area */
+    max-height: 72vh;
+    overflow: auto;
+    padding-right: .5rem;
+  }
+
+  /* cards */
+  .letter-item {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    padding: 14px 16px;
+    margin: 12px 0;
+  }
+  .letter-item h4 {
+    margin: 0 0 .25rem 0;
+    font-size: 1.05rem;
+    letter-spacing: .1px;
+  }
+  .letter-item .meta {
+    color: #666;
+    margin: 0 0 .35rem 0;
+    font-size: .95rem;
+  }
+  .letter-item .actions {
+    display: none; /* we removed 'Vis på kart' and keep only text toggle in the header */
+  }
+
+  /* details / full text */
+  .letter-item .details {
+    border-top: 1px solid #eee;
+    margin-top: .5rem;
+    padding-top: .5rem;
+  }
+  .letter-item .brevtekst {
+    white-space: pre-wrap;
+    font-family: Georgia, "Times New Roman", serif; /* easier on the eyes for long runs */
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+  .letter-item .toggle-details {
+    background: none;
+    border: none;
+    color: #0a62d0;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+  }
+  .letter-item .toggle-details:hover { text-decoration: underline; }
+
+  /* make the tiny control buttons look nicer */
+  .map-controls button {
+    border: 1px solid #ddd;
+    background: #f8f8f8;
+    padding: .4rem .7rem;
+    border-radius: 8px;
+    margin-right: .4rem;
+    cursor: pointer;
+  }
+  .map-controls button:hover { background: #f0f0f0; }
+  #selection-count { float: right; color: #666; }
+</style>
+
 <!-- Leaflet core JS (CSS should already be in your layout's <head>) -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 
@@ -25,11 +94,11 @@ permalink: /kart/
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" defer></script>
 
-<!-- Leaflet.Draw (correct package + correct CDN) -->
+<!-- Leaflet.Draw -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js" defer></script>
 
-<!-- Pass the correct base to JS (expands to /SuperDiplomatarium on GH Pages) -->
+<!-- baseurl for GH Pages -->
 <script>window.SITE_BASE = "{{ '' | relative_url }}";</script>
 
 <!-- Map logic -->

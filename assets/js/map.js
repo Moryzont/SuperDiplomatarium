@@ -1,8 +1,7 @@
 /* global L, window, document */
 let map, markers, drawnItems;
 let lettersData = [];
-let markerById = new Map();   // __id -> Leaflet marker
-let seq = 0;                  // running id for list/marker linking
+let seq = 0; // internal ids used for list toggles
 
 document.addEventListener('DOMContentLoaded', async () => {
   initializeMap();
@@ -55,7 +54,6 @@ async function loadLettersForMap() {
         const n = normalizeLetter(raw[k]);
         if (!Number.isFinite(n.LAT) || !Number.isFinite(n.LON)) continue;
 
-        // stable internal id for linking list <-> marker
         n.__id = seq++;
         lettersData.push(n);
 
@@ -66,7 +64,6 @@ async function loadLettersForMap() {
           <p>${escapeHtml(truncate(n.sammendrag, 150))}</p>
         `);
         markers.addLayer(marker);
-        markerById.set(n.__id, marker);
       }
     }
 
@@ -149,22 +146,17 @@ function displaySelectedLetters(letters) {
     <div class="letter-list">
       ${letters.map(l => `
         <div class="letter-item" data-id="${l.__id}">
-          <div class="letter-head">
-            <h4>${escapeHtml(l.DN_ref || l.SDN_ID || 'Uten referanse')}</h4>
-            <p class="meta">${escapeHtml(formatDateRange(l.date_start, l.date_end, l.original_dato))} – ${escapeHtml(l.normalized_name || l.original_sted || 'Ukjent')}</p>
-            <div class="actions" style="margin:.25rem 0 .5rem 0;">
-              <button class="show-on-map">Vis på kart</button>
-              <button class="toggle-details">Vis fulltekst</button>
-            </div>
-          </div>
-          <div class="details" style="display:none; padding:.25rem 0 .75rem 0;">
+          <h4>
+            ${escapeHtml(l.DN_ref || l.SDN_ID || 'Uten referanse')}
+            <button class="toggle-details" aria-expanded="false" style="margin-left:.5rem">Vis fulltekst</button>
+          </h4>
+          <p class="meta">${escapeHtml(formatDateRange(l.date_start, l.date_end, l.original_dato))} – ${escapeHtml(l.normalized_name || l.original_sted || 'Ukjent')}</p>
+          <div class="details" style="display:none;">
             <p><strong>date_start:</strong> ${escapeHtml(l.date_start || '')}
-               &nbsp;&nbsp;<strong>date_end:</strong> ${escapeHtml(l.date_end || '')}</p>
-            ${l.DN_ref || l.SDN_ID ? `<p><strong>DN:</strong> ${escapeHtml(l.DN_ref || '')}
-               &nbsp;&nbsp;<strong>SDN:</strong> ${escapeHtml(l.SDN_ID || '')}</p>` : ''}
-            <div class="brevtekst" style="white-space:pre-wrap; line-height:1.35; margin-top:.5rem;">
-              ${escapeHtml(l.brevtekst || '—')}
-            </div>
+               &nbsp;&nbsp;<strong>date_end:</strong> ${escapeHtml(l.date_end || '')}
+               ${l.DN_ref || l.SDN_ID ? `&nbsp;&nbsp;<strong>DN:</strong> ${escapeHtml(l.DN_ref || '')}&nbsp;&nbsp;<strong>SDN:</strong> ${escapeHtml(l.SDN_ID || '')}` : ''}
+            </p>
+            <div class="brevtekst">${escapeHtml(l.brevtekst || '—')}</div>
           </div>
         </div>
       `).join('')}
@@ -177,30 +169,20 @@ function displaySelectedLetters(letters) {
   if (sc) sc.textContent = `${letters.length} brev valgt`;
 }
 
-// toggle handlers for the result list
 function wireSelectionList() {
   const container = document.getElementById('selected-letters');
   if (!container) return;
 
   container.addEventListener('click', (ev) => {
+    const toggle = ev.target.closest('.toggle-details');
+    if (!toggle) return;
     const item = ev.target.closest('.letter-item');
-    if (!item) return;
-    const id = Number(item.dataset.id);
-
-    if (ev.target.classList.contains('toggle-details')) {
-      const details = item.querySelector('.details');
-      const btn = ev.target;
-      const show = details.style.display === 'none' || !details.style.display;
-      details.style.display = show ? 'block' : 'none';
-      btn.textContent = show ? 'Skjul fulltekst' : 'Vis fulltekst';
-      ev.preventDefault();
-    }
-
-    if (ev.target.classList.contains('show-on-map')) {
-      const m = markerById.get(id);
-      if (m) { map.setView(m.getLatLng(), Math.max(map.getZoom(), 8), { animate: true }); m.openPopup(); }
-      ev.preventDefault();
-    }
+    const details = item.querySelector('.details');
+    const show = details.style.display === 'none' || !details.style.display;
+    details.style.display = show ? 'block' : 'none';
+    toggle.textContent = show ? 'Skjul fulltekst' : 'Vis fulltekst';
+    toggle.setAttribute('aria-expanded', String(show));
+    ev.preventDefault();
   });
 }
 
