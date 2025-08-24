@@ -1,6 +1,7 @@
 /* global L, window, document */
 let map, markers, drawnItems;
 let lettersData = [];
+let currentSelection = []; // <-- what gets exported
 let seq = 0; // internal ids used for list toggles
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -8,6 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadLettersForMap();
   wireButtons();
   wireSelectionList();
+  wireExportBar();
 });
 
 function initializeMap() {
@@ -89,7 +91,6 @@ function normalizeLetter(l) {
   const LAT = parseFloat(l.LAT ?? l.lat);
   const LON = parseFloat(l.LON ?? l.lon);
 
-  // NEW: include fotnoter/tillegg (handle case variants)
   const fotnoter = l.fotnoter || l.Fotnoter || '';
   const tillegg  = l.tillegg  || l.Tillegg  || '';
 
@@ -158,6 +159,13 @@ function handleAreaDrawn(e) {
 function displaySelectedLetters(letters) {
   const container = document.getElementById('selected-letters');
   if (!container) return;
+
+  currentSelection = letters.slice(); // <-- store for export
+  const exportBar = document.getElementById('export-bar');
+  const enable = currentSelection.length > 0;
+  exportBar.style.display = 'flex';
+  document.getElementById('export-csv').disabled = !enable;
+  document.getElementById('export-txt').disabled = !enable;
 
   if (!letters.length) {
     container.innerHTML = '<p>Ingen brev i valgt område</p>';
@@ -238,6 +246,123 @@ function wireButtons() {
       document.getElementById('selected-letters').innerHTML = '';
       const sc = document.getElementById('selection-count');
       if (sc) sc.textContent = `${lettersData.length} brev med stedsinformasjon`;
+      currentSelection = [];
+      document.getElementById('export-csv').disabled = true;
+      document.getElementById('export-txt').disabled = true;
     });
   }
+}
+
+// ---------- eksport ----------
+function wireExportBar() {
+  const bar = document.getElementById('export-bar');
+  if (!bar) return;
+
+  document.getElementById('export-csv').addEventListener('click', () => {
+    if (!currentSelection.length) return;
+    const csv = toCSV(currentSelection);
+    downloadText(csv, 'brev-utvalg.csv', { addBOM: true });
+  });
+
+  document.getElementById('export-txt').addEventListener('click', () => {
+    if (!currentSelection.length) return;
+    const txt = toTXT(currentSelection);
+    downloadText(txt, 'brev-utvalg.txt');
+  });
+}
+
+function toCSV(rows) {
+  // Columns chosen for research workflows
+  const headers = [
+    'DN_ref','DN_klassisk','date_start','date_end','original_dato',
+    'sted','normalized_name','original_sted','lat','lon',
+    'sammendrag','brevtekst','fotnoter','tillegg'
+  ];
+  const esc = (v) => {
+    const s = String(v ?? '').replace(/\r?\n/g, '\n').replace(/"/g, '""');
+    return `"${s}"`;
+  };
+  const lines = [headers.join(',')];
+
+  for (const l of rows) {
+    const line = [
+      l.DN_ref || '',
+      dnToArchaic(l.DN_ref) || '',
+      l.date_start || '',
+      l.date_end || '',
+      l.original_dato || '',
+      (l.normalized_name || l.original_sted || '') || '',
+      l.normalized_name || '',
+      l.original_sted || '',
+      Number.isFinite(l.LAT) ? l.LAT : '',
+      Number.isFinite(l.LON) ? l.LON : '',
+      l.sammendrag || '',
+      l.brevtekst || '',
+      l.fotnoter || '',
+      l.tillegg || ''
+    ].map(esc).join(',');
+    lines.push(line);
+  }
+  return lines.join('\r\n');
+}
+
+function toTXT(rows) {
+  const parts = [];
+  for (const l of rows) {
+    const header = [
+      (l.DN_ref || 'Uten referanse'),
+      ' | ',
+      dnToArchaic(l.DN_ref) || ''
+    ].join('');
+    const dateLine = formatDateRange(l.date_start, l.date_end, l.original_dato);
+    const place = (l.normalized_name || l.original_sted || 'Ukjent');
+
+    const bits = [];
+    bits.push(header);
+    bits.push(`${dateLine} — ${place}`);
+    if (l.sammendrag) {
+      bits.push('');
+      bits.push('SAMMENDRAG:');
+      bits.push(l.sammendrag);
+    }
+    if (l.brevtekst) {
+      bits.push('');
+      bits.push('BREVTEKST:');
+      bits.push(l.brevtekst);
+    }
+    if (l.fotnoter) {
+      bits.push('');
+      bits.push('FOTNOTER:');
+      bits.push(l.fotnoter);
+    }
+    if (l.tillegg) {
+      bits.push('');
+      bits.push('TILLEGG:');
+      bits.push(l.tillegg);
+    }
+    if (Number.isFinite(l.LAT) && Number.isFinite(l.LON)) {
+      bits.push('');
+      bits.push(`Koordinater: ${l.LAT}, ${l.LON}`);
+    }
+
+    parts.push(bits.join('\n'));
+  }
+  return parts.join('\n\n---\n\n');
+}
+
+function downloadText(text, filename, opts = {}) {
+  const blobParts = [];
+  if (opts.addBOM) blobParts.push('\uFEFF'); // helps Excel open UTF-8 CSVs
+  blobParts.push(text);
+  const blob = new Blob(blobParts, { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 0);
 }

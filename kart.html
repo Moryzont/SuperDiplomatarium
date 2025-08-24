@@ -14,6 +14,18 @@ permalink: /kart/
   </div>
 
   <div id="map" style="height: 600px; width: 100%;"></div>
+
+  <!-- Export toolbar (appears above result list) -->
+  <div id="export-bar" class="export-bar" style="display:none;">
+    <div class="export-left">
+      <strong>Eksportér utvalg:</strong>
+    </div>
+    <div class="export-right">
+      <button id="export-txt" disabled>Last ned TXT</button>
+      <button id="export-csv" disabled>Last ned CSV</button>
+    </div>
+  </div>
+
   <div id="selected-letters"></div>
 </div>
 
@@ -21,6 +33,18 @@ permalink: /kart/
 <style>
   .map-container { max-width: 1100px; margin: 0 auto; }
   #selected-letters { margin-top: 1rem; }
+
+  .export-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: .5rem; padding: .5rem .25rem; margin-top: .75rem;
+    border-bottom: 1px solid #eee;
+  }
+  .export-bar button {
+    border: 1px solid #ddd; background: #f8f8f8; padding: .4rem .7rem;
+    border-radius: 8px; margin-left: .25rem; cursor: pointer;
+  }
+  .export-bar button[disabled] { opacity: .5; cursor: not-allowed; }
+  .export-bar button:hover:not([disabled]) { background: #f0f0f0; }
 
   /* big, comfy reading pane */
   .letter-list {
