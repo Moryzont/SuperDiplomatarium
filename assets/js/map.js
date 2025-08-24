@@ -89,6 +89,10 @@ function normalizeLetter(l) {
   const LAT = parseFloat(l.LAT ?? l.lat);
   const LON = parseFloat(l.LON ?? l.lon);
 
+  // NEW: include fotnoter/tillegg (handle case variants)
+  const fotnoter = l.fotnoter || l.Fotnoter || '';
+  const tillegg  = l.tillegg  || l.Tillegg  || '';
+
   return {
     DN_ref,
     original_dato, original_sted, normalized_name,
@@ -96,7 +100,8 @@ function normalizeLetter(l) {
     date_end: l.date_end || null,
     LAT, LON,
     sammendrag: l.sammendrag || '',
-    brevtekst: l.brevtekst || ''
+    brevtekst: l.brevtekst || '',
+    fotnoter, tillegg
   };
 }
 
@@ -120,13 +125,11 @@ function escapeHtml(s) {
 function dnToArchaic(dn) {
   if (!dn) return '';
   const m = String(dn).match(/^DN(\d{3})(\d{5})$/i);
-  if (!m) return ''; // unknown pattern, fail silently
+  if (!m) return '';
   const vol = parseInt(m[1], 10);
   const num = parseInt(m[2], 10);
   return `Diplomatarium Norvegicum ${toRoman(vol)}, ${num}`;
 }
-
-// Roman numerals up to 3999 (more than enough for DN volumes)
 function toRoman(num) {
   if (!Number.isFinite(num) || num <= 0) return '';
   const map = [
@@ -185,11 +188,10 @@ function displaySelectedLetters(letters) {
                &nbsp;&nbsp;<strong>date_end:</strong> ${escapeHtml(l.date_end || '')}
             </p>
 
-            <span class="section-label">Sammendrag</span>
-            <div class="sammendrag">${escapeHtml(l.sammendrag || '—')}</div>
-
-            <span class="section-label">Brevtekst</span>
-            <div class="brevtekst">${escapeHtml(l.brevtekst || '—')}</div>
+            ${section('Sammendrag', l.sammendrag, 'sammendrag')}
+            ${section('Brevtekst',   l.brevtekst,  'brevtekst')}
+            ${section('Fotnoter',    l.fotnoter,   'fotnoter')}
+            ${section('Tillegg',     l.tillegg,    'tillegg')}
           </div>
         </div>`;
       }).join('')}
@@ -200,6 +202,15 @@ function displaySelectedLetters(letters) {
 
   const sc = document.getElementById('selection-count');
   if (sc) sc.textContent = `${letters.length} brev valgt`;
+}
+
+// Render a section only if there is content
+function section(label, content, cls) {
+  if (!content || !String(content).trim()) return '';
+  return `
+    <span class="section-label">${escapeHtml(label)}</span>
+    <div class="${cls}">${escapeHtml(String(content))}</div>
+  `;
 }
 
 function wireSelectionList() {
