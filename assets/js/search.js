@@ -1,9 +1,30 @@
 /* global MiniSearch, document, window, fetch */
 
+/**
+ * SuperDiplomatarium – Søk (full file)
+ * - Fast, flexible search with phrases and field scoping
+ * - Robust date filtering:
+ *     • Query syntax: date:, on:, between:, before:, after:, year:
+ *       Examples:
+ *         - date:1350
+ *         - date:1350-06
+ *         - date:1350-06-17
+ *         - date:1350..1400
+ *         - date:1350-06..1352-03
+ *         - on:1492-05-20
+ *         - before:1500   (or before:1500-06)
+ *         - after:1200    (or after:1200-01-01)
+ *         - year:1200..1250   (legacy; year range)
+ *     • Optional UI fields (if present in HTML): #date-from, #date-to
+ *       Accepts YYYY or YYYY-MM or YYYY-MM-DD. Uses overlap with date_start/date_end.
+ * - Pagination (50 per page by default)
+ * - TXT/CSV export (CSV preserves original JSON keys; TXT mirrors expanded view)
+ */
+
 // =============== Globals ===============
 let searchIndex = null;
 let allLetters = [];
-let DOCS = new Map();          // id -> doc (authoritative store, includes _raw)
+let DOCS = new Map();          // id -> doc (authoritative store, includes _raw and ordinals)
 let chunksLoaded = 0;
 let totalChunks = 0;
 let debounceTimer = null;
@@ -103,6 +124,10 @@ function normalizeLetter(raw, chunkIndex, rowIndex) {
   const id = `${(dn || sdn || 'doc')}#${chunkIndex}:${rowIndex}`; // unique
   const sted_all = [original_sted, normalized_name].filter(Boolean).join(' | ');
 
+  // Precompute fast ordinals for date range overlap filters
+  const ordStart = dateStrToOrd(raw.date_start, false);
+  const ordEnd   = dateStrToOrd(raw.date_end, true) ?? ordStart;
+
   return {
     id,
     // normalized for searching + UI
@@ -119,12 +144,16 @@ function normalizeLetter(raw, chunkIndex, rowIndex) {
     tillegg,
     date_start: raw.date_start || null,
     date_end: raw.date_end || null,
+    // ordinals for fast date filtering
+    ORD_START: ordStart ?? null,
+    ORD_END: ordEnd ?? ordStart ?? null,
     // preserve original row for CSV export
     _raw: raw
   };
 }
 
 // =============== Query parsing & helpers ===============
+
 function parseQuery(q) {
   const orGroups = [];
   const groups = splitByOr(q);
@@ -132,13 +161,52 @@ function parseQuery(q) {
     const group = { must: [], not: [], filters: {} };
     const parts = tokenize(g);
     for (const part of parts) {
+      // Rich date filters
+      // year:1200..1250 (legacy year range)
       if (/^year:\d{3,4}\.\.\d{3,4}$/i.test(part)) {
-        const [from, to] = part.split(':')[1].split('..').map(Number);
-        group.filters.yearFrom = from; group.filters.yearTo = to; continue;
+        const [fromY, toY] = part.split(':')[1].split('..').map(Number);
+        group.filters.fromOrd = yearToOrd(fromY, false);
+        group.filters.toOrd   = yearToOrd(toY, true);
+        continue;
       }
-      if (/^before:\d{3,4}$/i.test(part)) { group.filters.yearTo = Number(part.split(':')[1]); continue; }
-      if (/^after:\d{3,4}$/i.test(part))  { group.filters.yearFrom = Number(part.split(':')[1]); continue; }
+      // before:YYYY[-MM[-DD]]
+      if (/^before:\d{3,4}([\-\.]\d{1,2}([\-\.]\d{1,2})?)?$/i.test(part)) {
+        const ds = part.split(':')[1].replace(/\./g, '-');
+        group.filters.toOrd = dateStrToOrd(ds, true);
+        continue;
+      }
+      // after:YYYY[-MM[-DD]]
+      if (/^after:\d{3,4}([\-\.]\d{1,2}([\-\.]\d{1,2})?)?$/i.test(part)) {
+        const ds = part.split(':')[1].replace(/\./g, '-');
+        group.filters.fromOrd = dateStrToOrd(ds, false);
+        continue;
+      }
+      // on:YYYY[-MM[-DD]]  (exact day; if YYYY or YYYY-MM, uses whole year/month)
+      if (/^on:\d{3,4}([\-\.]\d{1,2}([\-\.]\d{1,2})?)?$/i.test(part)) {
+        const ds = part.split(':')[1].replace(/\./g, '-');
+        const f = dateStrToOrd(ds, false);
+        const t = dateStrToOrd(ds, true);
+        group.filters.fromOrd = f;
+        group.filters.toOrd   = t;
+        continue;
+      }
+      // date:FROM..TO  (both sides flexible granularity)
+      if (/^date:\S+\.\.\S+$/i.test(part)) {
+        const span = part.split(':')[1];
+        const [a, b] = span.split('..');
+        group.filters.fromOrd = dateStrToOrd(a.replace(/\./g, '-'), false);
+        group.filters.toOrd   = dateStrToOrd(b.replace(/\./g, '-'), true);
+        continue;
+      }
+      // date:YYYY / date:YYYY-MM / date:YYYY-MM-DD
+      if (/^date:\d{3,4}([\-\.]\d{1,2}([\-\.]\d{1,2})?)?$/i.test(part)) {
+        const ds = part.split(':')[1].replace(/\./g, '-');
+        group.filters.fromOrd = dateStrToOrd(ds, false);
+        group.filters.toOrd   = dateStrToOrd(ds, true);
+        continue;
+      }
 
+      // Generic field scoping and terms
       const m = part.match(/^([a-z_]+):(.*)$/i);
       let field = null, term = part, isPhrase = false, neg = false;
       if (m) { field = m[1].toLowerCase(); term = m[2]; }
@@ -206,9 +274,60 @@ function mapScopedField(f) {
   return m[f] || null;
 }
 
+// =============== Date helpers ===============
+
+// Convert flexible date string to ordinal (YYYYMMDD integer-like order).
+// endSide=false → earliest day for that granularity; endSide=true → latest day.
+function dateStrToOrd(s, endSide) {
+  if (!s) return null;
+  const str = String(s).trim();
+  let m = str.match(/^(\d{3,4})-(\d{1,2})-(\d{1,2})$/); // YYYY-MM-DD
+  if (m) {
+    const y = clampYear(parseInt(m[1], 10));
+    const mo = clampMonth(parseInt(m[2], 10));
+    const d = clampDay(y, mo, parseInt(m[3], 10));
+    return y * 10000 + mo * 100 + d;
+  }
+  m = str.match(/^(\d{3,4})-(\d{1,2})$/); // YYYY-MM
+  if (m) {
+    const y = clampYear(parseInt(m[1], 10));
+    const mo = clampMonth(parseInt(m[2], 10));
+    const d = endSide ? daysInMonth(y, mo) : 1;
+    return y * 10000 + mo * 100 + d;
+  }
+  m = str.match(/^(\d{3,4})$/); // YYYY
+  if (m) {
+    const y = clampYear(parseInt(m[1], 10));
+    const mo = endSide ? 12 : 1;
+    const d = endSide ? 31 : 1;
+    return y * 10000 + mo * 100 + d;
+  }
+  // Try to parse if it's in some other variant (e.g., with dots)
+  const alt = str.replace(/\./g, '-');
+  if (alt !== str) return dateStrToOrd(alt, endSide);
+  return null;
+}
+function yearToOrd(y, endSide) { return dateStrToOrd(String(y), endSide); }
+function daysInMonth(y, m) {
+  if (m === 2) return (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)) ? 29 : 28;
+  return [4,6,9,11].includes(m) ? 30 : 31;
+}
+function clampYear(y) { return Math.min(Math.max(y, 1), 9999); }
+function clampMonth(m) { return Math.min(Math.max(m, 1), 12); }
+function clampDay(y, m, d) { return Math.min(Math.max(d, 1), daysInMonth(y, m)); }
+
+// Read optional UI date fields if present (#date-from, #date-to)
+function readUIRangeOrd() {
+  const fromEl = document.getElementById('date-from');
+  const toEl   = document.getElementById('date-to');
+  const fromOrd = fromEl && fromEl.value ? dateStrToOrd(fromEl.value, false) : null;
+  const toOrd   = toEl && toEl.value ? dateStrToOrd(toEl.value, true) : null;
+  return { fromOrd, toOrd };
+}
+
 // =============== Execution ===============
 function performSearch() {
-  const q = document.getElementById('search-input').value.trim();
+  const q = (document.getElementById('search-input')?.value || '').trim();
   if (!searchIndex || q.length < 2) {
     currentResultsAll = [];
     currentPage = 1;
@@ -221,10 +340,13 @@ function performSearch() {
   const orGroups = parseQuery(q);
   const selectedFields = fieldListForCheckboxes();
 
+  // Read UI date range (if present) and apply globally as intersection
+  const { fromOrd: uiFrom, toOrd: uiTo } = readUIRangeOrd();
+
   // union over OR groups; each group is ANDed
   let unionMap = new Map(); // id -> score
   for (const group of orGroups) {
-    const set = runAndGroup(group, selectedFields);
+    const set = runAndGroup(group, selectedFields, uiFrom, uiTo);
     for (const [id, score] of set) unionMap.set(id, Math.max(unionMap.get(id) || 0, score));
   }
 
@@ -251,8 +373,8 @@ function renderPage() {
   renderPagination(total);
 }
 
-// AND a single group: intersect required terms, apply NOTs and year filters
-function runAndGroup(group, selectedFields) {
+// AND a single group: intersect required terms, apply NOTs and date filters
+function runAndGroup(group, selectedFields, uiFromOrd = null, uiToOrd = null) {
   const mustSets = [];
   for (const term of group.must) {
     const fields = mapScopedField(term.field) ? [mapScopedField(term.field)] : selectedFields;
@@ -270,15 +392,27 @@ function runAndGroup(group, selectedFields) {
     for (const id of exclude.keys()) acc.delete(id);
   }
 
-  // year filters (overlap test on date_start/date_end)
-  const from = group.filters.yearFrom ?? -Infinity;
-  const to   = group.filters.yearTo   ?? +Infinity;
-  for (const id of Array.from(acc.keys())) {
-    const doc = DOCS.get(id);
-    const s = parseYear(doc?.date_start);
-    const e = parseYear(doc?.date_end) ?? s;
-    const overlaps = (s ?? e ?? -Infinity) <= to && (e ?? s ?? +Infinity) >= from;
-    if (!overlaps) acc.delete(id);
+  // Date filters: overlap test on [ORD_START, ORD_END]
+  // Combine group-level filters with UI-level filters (intersection)
+  const f1 = group.filters.fromOrd ?? null;
+  const t1 = group.filters.toOrd   ?? null;
+  const from = (f1 != null && uiFromOrd != null) ? Math.max(f1, uiFromOrd)
+              : (f1 != null ? f1 : uiFromOrd);
+  const to   = (t1 != null && uiToOrd   != null) ? Math.min(t1, uiToOrd)
+              : (t1 != null ? t1 : uiToOrd);
+
+  if (from != null || to != null) {
+    const F = from ?? -Infinity;
+    const T = to   ?? +Infinity;
+    for (const id of Array.from(acc.keys())) {
+      const doc = DOCS.get(id);
+      const s = doc?.ORD_START ?? null;
+      const e = doc?.ORD_END ?? s;
+      const S = s ?? -Infinity;
+      const E = e ?? +Infinity;
+      const overlaps = S <= T && E >= F;
+      if (!overlaps) acc.delete(id);
+    }
   }
 
   return acc;
@@ -465,6 +599,13 @@ function wireListeners() {
   if (input)  input.addEventListener('input', debounced);
   if (button) button.addEventListener('click', performSearch);
   document.querySelectorAll('.search-filters input').forEach(cb => cb.addEventListener('change', () => { performSearch(); }));
+
+  // If UI date fields exist, wire them with debounce as well
+  const df = document.getElementById('date-from');
+  const dt = document.getElementById('date-to');
+  const debounceDates = () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(performSearch, 150); };
+  if (df) df.addEventListener('input', debounceDates);
+  if (dt) dt.addEventListener('input', debounceDates);
 }
 
 function wireResultsList() {
