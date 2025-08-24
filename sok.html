@@ -29,7 +29,9 @@ permalink: /sok/
   </div>
 
   <div id="search-status"></div>
+
   <div id="search-results"></div>
+  <div id="results-pagination" class="pagination" style="display:none;"></div>
 </div>
 
 <!-- Page-local styles (gentle overrides for readability) -->
@@ -90,6 +92,19 @@ permalink: /sok/
     white-space: pre-wrap; font-family: Georgia, "Times New Roman", serif;
     font-size: 1rem; line-height: 1.6; margin-top:.35rem;
   }
+
+  /* pagination */
+  .pagination {
+    display:flex; flex-wrap:wrap; gap:.35rem; align-items:center;
+    justify-content:center; margin: .5rem 0 1.25rem 0;
+  }
+  .page-btn, .page-num {
+    border: 1px solid #ddd; background:#fafafa; padding: .35rem .6rem;
+    border-radius: 8px; cursor: pointer; user-select: none;
+  }
+  .page-btn[disabled] { opacity:.55; cursor:not-allowed; }
+  .page-num.active { background:#0a62d0; color:#fff; border-color:#0a62d0; }
+  .ellipsis { padding: .35rem .2rem; color:#888; }
 </style>
 
 <!-- MiniSearch -->

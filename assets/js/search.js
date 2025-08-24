@@ -9,13 +9,16 @@ let totalChunks = 0;
 let debounceTimer = null;
 
 let currentResultsAll = [];    // full set of matches (for export)
-let currentResultsShown = [];  // top N rendered
+let currentResultsShown = [];  // page slice
+let currentPage = 1;
+const PAGE_SIZE = 50;
 
 document.addEventListener('DOMContentLoaded', async () => {
   await initializeSearch();
   wireListeners();
   wireResultsList();
   wireExportBar();
+  wirePagination();
 });
 
 // baseurl helper
@@ -122,7 +125,6 @@ function normalizeLetter(raw, chunkIndex, rowIndex) {
 }
 
 // =============== Query parsing & helpers ===============
-
 function parseQuery(q) {
   const orGroups = [];
   const groups = splitByOr(q);
@@ -209,7 +211,9 @@ function performSearch() {
   const q = document.getElementById('search-input').value.trim();
   if (!searchIndex || q.length < 2) {
     currentResultsAll = [];
+    currentPage = 1;
     updateResults([]);
+    renderPagination(0);
     setExportEnabled(false);
     return;
   }
@@ -224,17 +228,27 @@ function performSearch() {
     for (const [id, score] of set) unionMap.set(id, Math.max(unionMap.get(id) || 0, score));
   }
 
-  // to array & sort (do not slice yet; we keep all for export)
+  // to array & sort (keep all for export)
   currentResultsAll = Array.from(unionMap.entries())
     .map(([id, score]) => ({ id, score }))
     .sort((a, b) => b.score - a.score)
     .map(r => Object.assign({}, DOCS.get(r.id) || {}, { score: r.score }));
 
-  // Show only top N for UI
-  currentResultsShown = currentResultsAll.slice(0, 50);
-  updateResults(currentResultsShown);
-
+  currentPage = 1;            // reset to first page on new search
+  renderPage();               // draw results + pagination
   setExportEnabled(currentResultsAll.length > 0);
+}
+
+function renderPage() {
+  const total = currentResultsAll.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (currentPage > totalPages) currentPage = totalPages;
+
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, total);
+  currentResultsShown = currentResultsAll.slice(start, end);
+  updateResults(currentResultsShown, start + 1, end, total);
+  renderPagination(total);
 }
 
 // AND a single group: intersect required terms, apply NOTs and year filters
@@ -335,8 +349,8 @@ function intersectScoreMaps(a, b) {
   return out;
 }
 
-// =============== Rendering & wiring ===============
-function updateResults(results) {
+// =============== Rendering & pagination ===============
+function updateResults(results, from = 0, to = 0, total = 0) {
   const container = document.getElementById('search-results');
   if (!container) return;
 
@@ -346,7 +360,7 @@ function updateResults(results) {
   }
 
   const html = `
-    <p class="result-count">Viser ${results.length} av ${currentResultsAll.length} treff</p>
+    <p class="result-count">Viser ${from}–${to} av ${total} treff</p>
     <div class="result-list">
       ${results.map(r => {
         const humanDate = formatDateRange(r.date_start, r.date_end, r.original_dato);
@@ -382,13 +396,67 @@ function updateResults(results) {
   container.innerHTML = html;
 }
 
+function renderPagination(total) {
+  const bar = document.getElementById('results-pagination');
+  if (!bar) return;
+
+  if (!total) {
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  bar.style.display = 'flex';
+
+  const nums = paginationWindow(currentPage, totalPages, 2);
+
+  const btn = (label, page, disabled = false, extraClass = '') =>
+    `<button class="page-btn ${extraClass}" data-page="${page}"${disabled ? ' disabled' : ''}>${label}</button>`;
+
+  const numsHtml = nums.map(n =>
+    (n === '…')
+      ? `<span class="ellipsis">…</span>`
+      : `<button class="page-num${n === currentPage ? ' active' : ''}" data-page="${n}">${n}</button>`
+  ).join('');
+
+  bar.innerHTML = [
+    btn('« Første', 1, currentPage === 1, 'first'),
+    btn('‹ Forrige', Math.max(1, currentPage - 1), currentPage === 1, 'prev'),
+    numsHtml,
+    btn('Neste ›', Math.min(totalPages, currentPage + 1), currentPage === totalPages, 'next'),
+    btn('Siste »', totalPages, currentPage === totalPages, 'last')
+  ].join('');
+}
+
+// Build a compact page number list: 1 … (c-2,c-1,c,c+1,c+2) … N
+function paginationWindow(curr, total, spread = 2) {
+  const out = [];
+  const add = (x) => { if (!out.includes(x)) out.push(x); };
+
+  add(1);
+  for (let i = curr - spread; i <= curr + spread; i++) if (i > 1 && i < total) add(i);
+  if (total > 1) add(total);
+
+  out.sort((a, b) => (a === '…' ? 1 : b === '…' ? -1 : a - b));
+
+  // insert ellipses where gaps > 1
+  const withDots = [];
+  for (let i = 0; i < out.length; i++) {
+    withDots.push(out[i]);
+    if (i < out.length - 1 && typeof out[i] === 'number' && typeof out[i + 1] === 'number' && out[i + 1] - out[i] > 1) {
+      withDots.push('…');
+    }
+  }
+  return withDots;
+}
+
+// =============== Event wiring ===============
 function section(label, content, cls) {
   if (!content || !String(content).trim()) return '';
   return `<span class="section-label">${escapeHtml(label)}</span>
           <div class="${cls}">${escapeHtml(String(content))}</div>`;
 }
-
-function truncate(text, n) { return !text ? '' : (text.length <= n ? text : text.slice(0, n) + '…'); }
 
 function wireListeners() {
   const input = document.getElementById('search-input');
@@ -396,7 +464,7 @@ function wireListeners() {
   const debounced = () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(performSearch, 200); };
   if (input)  input.addEventListener('input', debounced);
   if (button) button.addEventListener('click', performSearch);
-  document.querySelectorAll('.search-filters input').forEach(cb => cb.addEventListener('change', performSearch));
+  document.querySelectorAll('.search-filters input').forEach(cb => cb.addEventListener('change', () => { performSearch(); }));
 }
 
 function wireResultsList() {
@@ -412,6 +480,21 @@ function wireResultsList() {
     toggle.textContent = show ? 'Skjul fulltekst' : 'Vis fulltekst';
     toggle.setAttribute('aria-expanded', String(show));
     ev.preventDefault();
+  });
+}
+
+function wirePagination() {
+  const bar = document.getElementById('results-pagination');
+  if (!bar) return;
+  bar.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('[data-page]');
+    if (!btn) return;
+    const page = Number(btn.getAttribute('data-page'));
+    if (!Number.isFinite(page)) return;
+    currentPage = page;
+    renderPage();
+    // keep scroll position near top of results after page change
+    document.querySelector('.search-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 }
 
@@ -486,7 +569,7 @@ function toCSV_fromRaw(rows) {
   const esc = (v) => {
     const s = String(v ?? '').replace(/\r?\n/g, '\n').replace(/"/g, '""');
     return `"${s}"`;
-    };
+  };
   const lines = [headers.join(',')];
 
   for (const r of rows) {
