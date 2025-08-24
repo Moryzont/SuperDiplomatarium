@@ -37,14 +37,14 @@ async function loadLettersForMap() {
   const BASE = (window.SITE_BASE || '').replace(/\/+$/, ''); // '/SuperDiplomatarium'
   try {
     // 1) Load metadata
-    const metaUrl = `${BASE}/medieval-letters/data/metadata.json`;
+    const metaUrl = `${BASE}/data/metadata.json`;
     const metaResponse = await fetch(metaUrl);
     if (!metaResponse.ok) throw new Error(`HTTP ${metaResponse.status} on ${metaUrl}`);
     const metadata = await metaResponse.json();
 
     // 2) Stream chunks
     for (let i = 0; i < metadata.chunks; i++) {
-      const chunkPath = `${BASE}/medieval-letters/data/chunks/letters-chunk-${String(i).padStart(2, '0')}.json`;
+      const chunkPath = `${BASE}/data/chunks/letters-chunk-${String(i).padStart(2, '0')}.json`;
       const response = await fetch(chunkPath);
       if (!response.ok) throw new Error(`HTTP ${response.status} on ${chunkPath}`);
       const letters = await response.json();

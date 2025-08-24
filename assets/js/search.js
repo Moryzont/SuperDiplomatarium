@@ -50,7 +50,7 @@ async function initializeSearch() {
 
   try {
     // 1) Load metadata (respect baseurl)
-    const metaUrl = `${base()}/medieval-letters/data/metadata.json`;
+    const metaUrl = `${base()}/data/metadata.json`;
     const metaResponse = await fetch(metaUrl);
     if (!metaResponse.ok) throw new Error(`HTTP ${metaResponse.status} on ${metaUrl}`);
     const metadata = await metaResponse.json();
@@ -81,7 +81,7 @@ async function initializeSearch() {
 }
 
 async function loadChunk(i) {
-  const url = `${base()}/medieval-letters/data/chunks/letters-chunk-${String(i).padStart(2, '0')}.json`;
+  const url = `${base()}/data/chunks/letters-chunk-${String(i).padStart(2, '0')}.json`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status} on ${url}`);
   const rawLetters = await res.json();
