@@ -17,13 +17,13 @@ permalink: /kart/
   <div id="selected-letters"></div>
 </div>
 
-<!-- Page-local styles (override gently without touching main.css) -->
+<!-- Page-local styles (gentle overrides) -->
 <style>
-  /* layout */
   .map-container { max-width: 1100px; margin: 0 auto; }
   #selected-letters { margin-top: 1rem; }
+
+  /* big, comfy reading pane */
   .letter-list {
-    /* give researchers a large, comfy reading area */
     max-height: 72vh;
     overflow: auto;
     padding-right: .5rem;
@@ -37,56 +37,52 @@ permalink: /kart/
     padding: 14px 16px;
     margin: 12px 0;
   }
-  .letter-item h4 {
-    margin: 0 0 .25rem 0;
-    font-size: 1.05rem;
-    letter-spacing: .1px;
+
+  .letter-item h4 { margin: 0 0 .35rem 0; font-size: 1.05rem; }
+
+  .idline {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
   }
-  .letter-item .meta {
-    color: #666;
-    margin: 0 0 .35rem 0;
-    font-size: .95rem;
+  .idline .dn-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 600;
   }
-  .letter-item .actions {
-    display: none; /* we removed 'Vis på kart' and keep only text toggle in the header */
+  .idline .dn-archaic {
+    color: #555; font-style: italic; font-size: .95rem;
   }
 
-  /* details / full text */
-  .letter-item .details {
-    border-top: 1px solid #eee;
-    margin-top: .5rem;
-    padding-top: .5rem;
+  .letter-item .meta {
+    color: #666; margin: .15rem 0 .5rem 0; font-size: .95rem;
   }
-  .letter-item .brevtekst {
-    white-space: pre-wrap;
-    font-family: Georgia, "Times New Roman", serif; /* easier on the eyes for long runs */
-    font-size: 1rem;
-    line-height: 1.6;
-  }
+
   .letter-item .toggle-details {
-    background: none;
-    border: none;
-    color: #0a62d0;
-    padding: 0;
-    font: inherit;
-    cursor: pointer;
+    background: none; border: none; color: #0a62d0; padding: 0; font: inherit; cursor: pointer;
   }
   .letter-item .toggle-details:hover { text-decoration: underline; }
 
-  /* make the tiny control buttons look nicer */
+  .letter-item .details {
+    border-top: 1px solid #eee; margin-top: .5rem; padding-top: .6rem;
+  }
+  .letter-item .sammendrag,
+  .letter-item .brevtekst {
+    white-space: pre-wrap;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1rem; line-height: 1.6;
+    margin-top: .35rem;
+  }
+  .letter-item .section-label {
+    display: block; font-weight: 600; color: #333; margin-top: .35rem;
+  }
+
   .map-controls button {
-    border: 1px solid #ddd;
-    background: #f8f8f8;
-    padding: .4rem .7rem;
-    border-radius: 8px;
-    margin-right: .4rem;
-    cursor: pointer;
+    border: 1px solid #ddd; background: #f8f8f8; padding: .4rem .7rem;
+    border-radius: 8px; margin-right: .4rem; cursor: pointer;
   }
   .map-controls button:hover { background: #f0f0f0; }
   #selection-count { float: right; color: #666; }
 </style>
 
-<!-- Leaflet core JS (CSS should already be in your layout's <head>) -->
+<!-- Leaflet core JS (CSS is in layout's <head>) -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 
 <!-- MarkerCluster -->

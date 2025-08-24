@@ -58,7 +58,7 @@ async function loadLettersForMap() {
         lettersData.push(n);
 
         const marker = L.marker([n.LAT, n.LON]).bindPopup(`
-          <h4>${escapeHtml(n.DN_ref || n.SDN_ID || 'Uten referanse')}</h4>
+          <h4>${escapeHtml(n.DN_ref || 'Uten referanse')}</h4>
           <p><strong>Dato:</strong> ${escapeHtml(formatDateRange(n.date_start, n.date_end, n.original_dato))}</p>
           <p><strong>Sted:</strong> ${escapeHtml(n.normalized_name || n.original_sted || 'Ukjent')}</p>
           <p>${escapeHtml(truncate(n.sammendrag, 150))}</p>
@@ -80,7 +80,6 @@ async function loadLettersForMap() {
 
 // ---------- normalisering & helpers ----------
 function normalizeLetter(l) {
-  const SDN_ID = l.SDN_ID || l.SDNID || l['\ufeffSDNID'] || l['﻿SDNID'] || null;
   const DN_ref = l.DN_ref || l.DN_REF || l.DNREF || null;
 
   const original_dato = l.original_dato || l.dato || null;
@@ -91,7 +90,7 @@ function normalizeLetter(l) {
   const LON = parseFloat(l.LON ?? l.lon);
 
   return {
-    DN_ref, SDN_ID,
+    DN_ref,
     original_dato, original_sted, normalized_name,
     date_start: l.date_start || null,
     date_end: l.date_end || null,
@@ -115,6 +114,29 @@ function truncate(t, n) { return !t ? '' : (t.length <= n ? t : t.slice(0, n) + 
 function escapeHtml(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Convert "DN01100136" -> "Diplomatarium Norvegicum XI, 136"
+function dnToArchaic(dn) {
+  if (!dn) return '';
+  const m = String(dn).match(/^DN(\d{3})(\d{5})$/i);
+  if (!m) return ''; // unknown pattern, fail silently
+  const vol = parseInt(m[1], 10);
+  const num = parseInt(m[2], 10);
+  return `Diplomatarium Norvegicum ${toRoman(vol)}, ${num}`;
+}
+
+// Roman numerals up to 3999 (more than enough for DN volumes)
+function toRoman(num) {
+  if (!Number.isFinite(num) || num <= 0) return '';
+  const map = [
+    [1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],
+    [100,'C'],[90,'XC'],[50,'L'],[40,'XL'],
+    [10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']
+  ];
+  let out = '';
+  for (const [v, s] of map) { while (num >= v) { out += s; num -= v; } }
+  return out;
 }
 
 // ---------- utvalg ----------
@@ -144,22 +166,33 @@ function displaySelectedLetters(letters) {
   const html = `
     <h3>${letters.length} brev i valgt område</h3>
     <div class="letter-list">
-      ${letters.map(l => `
+      ${letters.map(l => {
+        const humanDate = formatDateRange(l.date_start, l.date_end, l.original_dato);
+        const archaic = dnToArchaic(l.DN_ref);
+        return `
         <div class="letter-item" data-id="${l.__id}">
+          <div class="idline">
+            <span class="dn-code">${escapeHtml(l.DN_ref || 'Uten referanse')}</span>
+            <span class="dn-archaic">${escapeHtml(archaic)}</span>
+          </div>
           <h4>
-            ${escapeHtml(l.DN_ref || l.SDN_ID || 'Uten referanse')}
-            <button class="toggle-details" aria-expanded="false" style="margin-left:.5rem">Vis fulltekst</button>
+            <button class="toggle-details" aria-expanded="false">Vis fulltekst</button>
           </h4>
-          <p class="meta">${escapeHtml(formatDateRange(l.date_start, l.date_end, l.original_dato))} – ${escapeHtml(l.normalized_name || l.original_sted || 'Ukjent')}</p>
+          <p class="meta">${escapeHtml(humanDate)} – ${escapeHtml(l.normalized_name || l.original_sted || 'Ukjent')}</p>
+
           <div class="details" style="display:none;">
             <p><strong>date_start:</strong> ${escapeHtml(l.date_start || '')}
                &nbsp;&nbsp;<strong>date_end:</strong> ${escapeHtml(l.date_end || '')}
-               ${l.DN_ref || l.SDN_ID ? `&nbsp;&nbsp;<strong>DN:</strong> ${escapeHtml(l.DN_ref || '')}&nbsp;&nbsp;<strong>SDN:</strong> ${escapeHtml(l.SDN_ID || '')}` : ''}
             </p>
+
+            <span class="section-label">Sammendrag</span>
+            <div class="sammendrag">${escapeHtml(l.sammendrag || '—')}</div>
+
+            <span class="section-label">Brevtekst</span>
             <div class="brevtekst">${escapeHtml(l.brevtekst || '—')}</div>
           </div>
-        </div>
-      `).join('')}
+        </div>`;
+      }).join('')}
     </div>
   `;
 
