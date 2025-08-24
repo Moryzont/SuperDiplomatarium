@@ -1,37 +1,33 @@
 ---
 layout: default
 title: Søk i brevsamlingen
+permalink: /sok/
 ---
 
 <div class="search-container">
   <h1>Søk i brevsamlingen</h1>
-  
+
   <div class="search-box">
     <input type="text" id="search-input" placeholder="Søk i 19.000 brev..." autocomplete="off">
     <button id="search-btn">Søk</button>
   </div>
-  
+
   <div class="search-filters">
-    <label>
-      <input type="checkbox" id="search-sammendrag" checked> Sammendrag
-    </label>
-    <label>
-      <input type="checkbox" id="search-brevtekst" checked> Brevtekst
-    </label>
-    <label>
-      <input type="checkbox" id="search-sted"> Sted
-    </label>
-    <label>
-      <input type="checkbox" id="search-kilde"> Kilde
-    </label>
+    <label><input type="checkbox" id="search-sammendrag" checked> Sammendrag</label>
+    <label><input type="checkbox" id="search-brevtekst" checked> Brevtekst</label>
+    <label><input type="checkbox" id="search-sted"> Sted</label>
+    <label><input type="checkbox" id="search-kilde"> Kilde</label>
   </div>
-  
+
   <div id="search-status"></div>
   <div id="search-results"></div>
 </div>
 
-<!-- MiniSearch bibliotek -->
-<script src="https://cdn.jsdelivr.net/npm/minisearch@6.1.0/dist/umd/index.min.js"></script>
+<!-- MiniSearch -->
+<script src="https://cdn.jsdelivr.net/npm/minisearch@6.1.0/dist/umd/index.min.js" defer></script>
 
-<!-- Søkelogikk -->
-<script src="{{ '/assets/js/search.js' | relative_url }}"></script>
+<!-- Pass correct base to JS (becomes /SuperDiplomatarium on GH Pages) -->
+<script>window.SITE_BASE = "{{ '' | relative_url }}";</script>
+
+<!-- Search logic -->
+<script src="{{ '/assets/js/search.js' | relative_url }}" defer></script>
