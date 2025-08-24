@@ -1,7 +1,7 @@
 /* global L, window, document */
 let map, markers, drawnItems;
 let lettersData = [];
-let currentSelection = []; // <-- what gets exported
+let currentSelection = []; // what gets exported
 let seq = 0; // internal ids used for list toggles
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -53,7 +53,7 @@ async function loadLettersForMap() {
       const raw = await res.json();
 
       for (let k = 0; k < raw.length; k++) {
-        const n = normalizeLetter(raw[k]);
+        const n = normalizeLetter(raw[k]);  // n._raw holds original row
         if (!Number.isFinite(n.LAT) || !Number.isFinite(n.LON)) continue;
 
         n.__id = seq++;
@@ -93,8 +93,10 @@ function normalizeLetter(l) {
 
   const fotnoter = l.fotnoter || l.Fotnoter || '';
   const tillegg  = l.tillegg  || l.Tillegg  || '';
+  const kilde    = l.kilde    || l.Kilde    || '';
 
   return {
+    // normalized fields for UI
     DN_ref,
     original_dato, original_sted, normalized_name,
     date_start: l.date_start || null,
@@ -102,7 +104,9 @@ function normalizeLetter(l) {
     LAT, LON,
     sammendrag: l.sammendrag || '',
     brevtekst: l.brevtekst || '',
-    fotnoter, tillegg
+    fotnoter, tillegg, kilde,
+    // keep the original row exactly as-is for CSV export
+    _raw: l
   };
 }
 
@@ -160,7 +164,7 @@ function displaySelectedLetters(letters) {
   const container = document.getElementById('selected-letters');
   if (!container) return;
 
-  currentSelection = letters.slice(); // <-- store for export
+  currentSelection = letters.slice(); // store for export
   const exportBar = document.getElementById('export-bar');
   const enable = currentSelection.length > 0;
   exportBar.style.display = 'flex';
@@ -194,6 +198,8 @@ function displaySelectedLetters(letters) {
           <div class="details" style="display:none;">
             <p><strong>date_start:</strong> ${escapeHtml(l.date_start || '')}
                &nbsp;&nbsp;<strong>date_end:</strong> ${escapeHtml(l.date_end || '')}
+               &nbsp;&nbsp;<strong>Sted:</strong> ${escapeHtml(l.original_sted || 'Ukjent')}
+               &nbsp;&nbsp;<strong>Normalisert:</strong> ${escapeHtml(l.normalized_name || '—')}
             </p>
 
             ${section('Sammendrag', l.sammendrag, 'sammendrag')}
@@ -260,24 +266,77 @@ function wireExportBar() {
 
   document.getElementById('export-csv').addEventListener('click', () => {
     if (!currentSelection.length) return;
-    const csv = toCSV(currentSelection);
+    const csv = toCSV_fromRaw(currentSelection);
     downloadText(csv, 'brev-utvalg.csv', { addBOM: true });
   });
 
   document.getElementById('export-txt').addEventListener('click', () => {
     if (!currentSelection.length) return;
-    const txt = toTXT(currentSelection);
+    const txt = toTXT_likeDetails(currentSelection);
     downloadText(txt, 'brev-utvalg.txt');
   });
 }
 
-function toCSV(rows) {
-  // Columns chosen for research workflows
-  const headers = [
-    'DN_ref','DN_klassisk','date_start','date_end','original_dato',
-    'sted','normalized_name','original_sted','lat','lon',
-    'sammendrag','brevtekst','fotnoter','tillegg'
+// TXT: mirror the “Vis fulltekst” box and include BOTH sted + Normalized_name
+function toTXT_likeDetails(rows) {
+  const parts = [];
+  for (const l of rows) {
+    const headerLeft  = l.DN_ref || 'Uten referanse';
+    const headerRight = dnToArchaic(l.DN_ref) || '';
+    const dateLine = formatDateRange(l.date_start, l.date_end, l.original_dato);
+    const placeOrig = l.original_sted || 'Ukjent';
+    const placeNorm = l.normalized_name || '—';
+
+    const bits = [];
+    bits.push(`${headerLeft}    ${headerRight}`);
+    bits.push(`${dateLine} — Sted: ${placeOrig} | Normalisert: ${placeNorm}`);
+    bits.push(`date_start: ${l.date_start || ''}    date_end: ${l.date_end || ''}`);
+
+    if (l.sammendrag && String(l.sammendrag).trim()) {
+      bits.push('');
+      bits.push('SAMMENDRAG:');
+      bits.push(l.sammendrag);
+    }
+    if (l.brevtekst && String(l.brevtekst).trim()) {
+      bits.push('');
+      bits.push('BREVTEKST:');
+      bits.push(l.brevtekst);
+    }
+    if (l.fotnoter && String(l.fotnoter).trim()) {
+      bits.push('');
+      bits.push('FOTNOTER:');
+      bits.push(l.fotnoter);
+    }
+    if (l.tillegg && String(l.tillegg).trim()) {
+      bits.push('');
+      bits.push('TILLEGG:');
+      bits.push(l.tillegg);
+    }
+
+    parts.push(bits.join('\n'));
+  }
+  return parts.join('\n\n---\n\n');
+}
+
+// CSV: include exactly the columns as in the original JSON rows (union of keys)
+function toCSV_fromRaw(rows) {
+  const keySet = new Set();
+  for (const l of rows) {
+    const raw = l._raw || {};
+    for (const k of Object.keys(raw)) keySet.add(k);
+  }
+
+  // Preferred ordering first (if present), then the rest alphabetically.
+  const preferred = [
+    '\ufeffSDNID','SDNID','DN_REF','DN_ref','DNREF',
+    'sammendrag','kilde','nummer','dato','sted','brevtekst','fotnoter','tillegg','sidetall_bind',
+    'date_start','date_end','Normalized_name','normalized_name',
+    'lat','lon','LAT','LON','Region','Problem'
   ];
+  const presentPreferred = preferred.filter(k => keySet.has(k));
+  const remaining = Array.from(keySet).filter(k => !presentPreferred.includes(k)).sort();
+  const headers = [...presentPreferred, ...remaining];
+
   const esc = (v) => {
     const s = String(v ?? '').replace(/\r?\n/g, '\n').replace(/"/g, '""');
     return `"${s}"`;
@@ -285,69 +344,11 @@ function toCSV(rows) {
   const lines = [headers.join(',')];
 
   for (const l of rows) {
-    const line = [
-      l.DN_ref || '',
-      dnToArchaic(l.DN_ref) || '',
-      l.date_start || '',
-      l.date_end || '',
-      l.original_dato || '',
-      (l.normalized_name || l.original_sted || '') || '',
-      l.normalized_name || '',
-      l.original_sted || '',
-      Number.isFinite(l.LAT) ? l.LAT : '',
-      Number.isFinite(l.LON) ? l.LON : '',
-      l.sammendrag || '',
-      l.brevtekst || '',
-      l.fotnoter || '',
-      l.tillegg || ''
-    ].map(esc).join(',');
+    const raw = l._raw || {};
+    const line = headers.map(h => esc(raw[h])).join(',');
     lines.push(line);
   }
   return lines.join('\r\n');
-}
-
-function toTXT(rows) {
-  const parts = [];
-  for (const l of rows) {
-    const header = [
-      (l.DN_ref || 'Uten referanse'),
-      ' | ',
-      dnToArchaic(l.DN_ref) || ''
-    ].join('');
-    const dateLine = formatDateRange(l.date_start, l.date_end, l.original_dato);
-    const place = (l.normalized_name || l.original_sted || 'Ukjent');
-
-    const bits = [];
-    bits.push(header);
-    bits.push(`${dateLine} — ${place}`);
-    if (l.sammendrag) {
-      bits.push('');
-      bits.push('SAMMENDRAG:');
-      bits.push(l.sammendrag);
-    }
-    if (l.brevtekst) {
-      bits.push('');
-      bits.push('BREVTEKST:');
-      bits.push(l.brevtekst);
-    }
-    if (l.fotnoter) {
-      bits.push('');
-      bits.push('FOTNOTER:');
-      bits.push(l.fotnoter);
-    }
-    if (l.tillegg) {
-      bits.push('');
-      bits.push('TILLEGG:');
-      bits.push(l.tillegg);
-    }
-    if (Number.isFinite(l.LAT) && Number.isFinite(l.LON)) {
-      bits.push('');
-      bits.push(`Koordinater: ${l.LAT}, ${l.LON}`);
-    }
-
-    parts.push(bits.join('\n'));
-  }
-  return parts.join('\n\n---\n\n');
 }
 
 function downloadText(text, filename, opts = {}) {
