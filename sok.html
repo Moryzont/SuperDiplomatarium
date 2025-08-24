@@ -19,21 +19,18 @@ permalink: /sok/
     <label><input type="checkbox" id="search-kilde"> Kilde</label>
   </div>
 
-  <!-- Date filters -->
-  <div class="date-filters" aria-label="Filtrer på dato">
-    <div class="date-row">
-      <label>Fra
-        <input id="date-from" inputmode="numeric" placeholder="YYYY, YYYY-MM eller YYYY-MM-DD">
-      </label>
-      <label>Til
-        <input id="date-to" inputmode="numeric" placeholder="YYYY, YYYY-MM eller YYYY-MM-DD">
-      </label>
-      <label class="exact">
-        <input type="checkbox" id="date-exact"> Eksakt dato
-      </label>
-      <button id="date-clear" class="ghost-btn" title="Tøm dato">Nullstill</button>
+  <!-- Date row: simple, compact, no drop-down calendars -->
+  <div class="date-row">
+    <div class="date-input">
+      <label for="date-from">Fra</label>
+      <input id="date-from" placeholder="YYYY / YYYY-MM / YYYY-MM-DD" inputmode="numeric" autocomplete="off">
     </div>
-    <div id="date-error" class="date-error" role="status" aria-live="polite"></div>
+    <div class="date-input">
+      <label for="date-to">Til</label>
+      <input id="date-to" placeholder="YYYY / YYYY-MM / YYYY-MM-DD" inputmode="numeric" autocomplete="off">
+    </div>
+    <label class="chk-inline"><input type="checkbox" id="date-exact"> Eksakt dato</label>
+    <button id="date-reset" type="button" class="btn-secondary">Nullstill</button>
   </div>
 
   <!-- Export toolbar -->
@@ -51,72 +48,49 @@ permalink: /sok/
   <div id="results-pagination" class="pagination" style="display:none;"></div>
 </div>
 
-<!-- Page-local styles -->
 <style>
   .search-container { max-width: 1100px; margin: 0 auto; }
   .search-box { display:flex; gap:.5rem; margin-bottom:.5rem; }
   .search-box input { flex:1; }
-  .search-filters { margin-bottom:.5rem; display:flex; gap:1rem; flex-wrap:wrap; }
 
-  .date-filters { margin: .25rem 0 .5rem 0; }
-  .date-row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
-  .date-row label { display:flex; flex-direction:column; gap:.25rem; font-size:.95rem; }
-  .date-row input[type="text"], .date-row input[type="search"], .date-row input:not([type]) {
-    padding:.4rem .5rem; border:1px solid #ddd; border-radius:8px; min-width:16ch;
+  .search-filters { margin-bottom:.25rem; display:flex; gap:1rem; flex-wrap:wrap; }
+
+  .date-row {
+    display:flex; align-items:end; gap:.75rem; flex-wrap:wrap;
+    padding:.5rem 0 .25rem 0; border-bottom:1px solid #eee; margin-bottom:.5rem;
   }
-  .date-row .exact { display:flex; flex-direction:row; align-items:center; gap:.35rem; margin-left:.25rem; }
-  .ghost-btn {
-    border:1px solid #ddd; background:#fafafa; padding:.4rem .7rem; border-radius:8px; cursor:pointer;
-  }
-  .ghost-btn:hover { background:#f0f0f0; }
-  .date-error { color:#b00; min-height:1.2em; font-size:.9rem; margin-top:.25rem; }
+  .date-input { display:flex; flex-direction:column; min-width:220px; }
+  .date-input input { padding:.5rem .6rem; border:1px solid #ddd; border-radius:8px; }
+  .chk-inline { display:flex; align-items:center; gap:.4rem; margin-left:.25rem; }
+  .btn-secondary { border:1px solid #ddd; background:#f8f8f8; padding:.45rem .7rem; border-radius:8px; cursor:pointer; }
+  .btn-secondary:hover { background:#f0f0f0; }
 
   .export-bar {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: .5rem; padding: .5rem .25rem; margin: .5rem 0 .25rem 0;
-    border-bottom: 1px solid #eee;
+    display:flex; align-items:center; justify-content:space-between;
+    gap:.5rem; padding:.5rem .25rem; margin:.25rem 0 .25rem 0; border-bottom:1px solid #eee;
   }
-  .export-bar button {
-    border: 1px solid #ddd; background: #f8f8f8; padding: .4rem .7rem;
-    border-radius: 8px; margin-left: .25rem; cursor: pointer;
-  }
-  .export-bar button[disabled] { opacity: .5; cursor: not-allowed; }
-  .export-bar button:hover:not([disabled]) { background:#f0f0f0; }
+  .export-bar button { border:1px solid #ddd; background:#f8f8f8; padding:.4rem .7rem; border-radius:8px; cursor:pointer; }
+  .export-bar button[disabled]{ opacity:.5; cursor:not-allowed; }
+  .export-bar button:hover:not([disabled]){ background:#f0f0f0; }
 
-  .result-list {
-    max-height: 72vh; overflow: auto; padding-right: .5rem;
-  }
-  .search-result {
-    background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06);
-    padding: 14px 16px; margin: 12px 0;
-  }
-  .idline { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .idline .dn-code { font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-weight: 600; }
-  .idline .dn-archaic { color: #555; font-style: italic; font-size: .95rem; }
-  .search-result h3 { margin: .35rem 0 .15rem 0; font-size: 1.05rem; }
-  .search-result .meta { color:#666; margin: .15rem 0 .4rem 0; font-size:.95rem; }
-  .toggle-details { background: none; border: none; color: #0a62d0; padding: 0; font: inherit; cursor: pointer; }
-  .toggle-details:hover { text-decoration: underline; }
+  .result-list { max-height:72vh; overflow:auto; padding-right:.5rem; }
+  .search-result { background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); padding:14px 16px; margin:12px 0; }
+  .idline { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .dn-code { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight:600; }
+  .dn-archaic { color:#555; font-style:italic; font-size:.95rem; }
+  .toggle-details { background:none; border:none; color:#0a62d0; padding:0; font:inherit; cursor:pointer; }
+  .toggle-details:hover { text-decoration:underline; }
   .details { border-top:1px solid #eee; margin-top:.5rem; padding-top:.6rem; }
   .section-label { display:block; font-weight:600; color:#333; margin-top:.5rem; }
-  .sammendrag, .brevtekst, .fotnoter, .tillegg {
-    white-space: pre-wrap; font-family: Georgia,"Times New Roman",serif; font-size:1rem; line-height:1.6; margin-top:.35rem;
-  }
+  .sammendrag,.brevtekst,.fotnoter,.tillegg { white-space:pre-wrap; font-family:Georgia,"Times New Roman",serif; font-size:1rem; line-height:1.6; margin-top:.35rem; }
 
-  .pagination {
-    display:flex; flex-wrap:wrap; gap:.35rem; align-items:center; justify-content:center; margin: .5rem 0 1.25rem 0;
-  }
-  .page-btn, .page-num {
-    border:1px solid #ddd; background:#fafafa; padding:.35rem .6rem; border-radius:8px; cursor:pointer; user-select:none;
-  }
-  .page-btn[disabled] { opacity:.55; cursor:not-allowed; }
+  .pagination { display:flex; flex-wrap:wrap; gap:.35rem; align-items:center; justify-content:center; margin:.5rem 0 1.25rem 0; }
+  .page-btn,.page-num { border:1px solid #ddd; background:#fafafa; padding:.35rem .6rem; border-radius:8px; cursor:pointer; user-select:none; }
+  .page-btn[disabled]{ opacity:.55; cursor:not-allowed; }
   .page-num.active { background:#0a62d0; color:#fff; border-color:#0a62d0; }
   .ellipsis { padding:.35rem .2rem; color:#888; }
 </style>
 
-<!-- MiniSearch -->
 <script src="https://cdn.jsdelivr.net/npm/minisearch@6.1.0/dist/umd/index.min.js" defer></script>
-
 <script>window.SITE_BASE = "{{ '' | relative_url }}";</script>
-
 <script src="{{ '/assets/js/search.js' | relative_url }}" defer></script>
