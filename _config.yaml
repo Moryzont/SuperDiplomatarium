@@ -1,8 +1,10 @@
 # basic innstillinger
-title: Diplomatariumet i ny form
-description: Digital samling av 19.000 brev fra norsk og skandinavisk middelalder
-baseurl: ""
-url: ""
+# _config.yml
+title: "SuperDiplomatarium"
+description: "..."
+url: "https://moryzont.github.io"     # no trailing slash
+baseurl: "/SuperDiplomatarium"         # LEADING slash, NO trailing slash
+
 
 # Build settings
 markdown: kramdown
