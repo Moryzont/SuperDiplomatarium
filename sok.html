@@ -19,9 +19,78 @@ permalink: /sok/
     <label><input type="checkbox" id="search-kilde"> Kilde</label>
   </div>
 
+  <!-- Export toolbar (enabled when results exist) -->
+  <div id="export-bar" class="export-bar" style="display:none;">
+    <div class="export-left"><strong>Eksportér treff:</strong></div>
+    <div class="export-right">
+      <button id="export-txt" disabled>Last ned TXT</button>
+      <button id="export-csv" disabled>Last ned CSV</button>
+    </div>
+  </div>
+
   <div id="search-status"></div>
   <div id="search-results"></div>
 </div>
+
+<!-- Page-local styles (gentle overrides for readability) -->
+<style>
+  .search-container { max-width: 1100px; margin: 0 auto; }
+  .search-box { display:flex; gap:.5rem; margin-bottom:.5rem; }
+  .search-box input { flex:1; }
+  .search-filters { margin-bottom:.5rem; display:flex; gap:1rem; flex-wrap:wrap; }
+
+  .export-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: .5rem; padding: .5rem .25rem; margin: .5rem 0 .25rem 0;
+    border-bottom: 1px solid #eee;
+  }
+  .export-bar button {
+    border: 1px solid #ddd; background: #f8f8f8; padding: .4rem .7rem;
+    border-radius: 8px; margin-left: .25rem; cursor: pointer;
+  }
+  .export-bar button[disabled] { opacity: .5; cursor: not-allowed; }
+  .export-bar button:hover:not([disabled]) { background:#f0f0f0; }
+
+  /* results list */
+  .result-list {
+    max-height: 72vh;
+    overflow: auto;
+    padding-right: .5rem;
+  }
+  .search-result {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    padding: 14px 16px;
+    margin: 12px 0;
+  }
+
+  .idline {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  }
+  .idline .dn-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 600;
+  }
+  .idline .dn-archaic {
+    color: #555; font-style: italic; font-size: .95rem;
+  }
+
+  .search-result h3 { margin: .35rem 0 .15rem 0; font-size: 1.05rem; }
+  .search-result .meta { color:#666; margin: .15rem 0 .4rem 0; font-size:.95rem; }
+
+  .toggle-details {
+    background: none; border: none; color: #0a62d0; padding: 0; font: inherit; cursor: pointer;
+  }
+  .toggle-details:hover { text-decoration: underline; }
+
+  .details { border-top:1px solid #eee; margin-top:.5rem; padding-top:.6rem; }
+  .section-label { display:block; font-weight:600; color:#333; margin-top:.5rem; }
+  .sammendrag, .brevtekst, .fotnoter, .tillegg {
+    white-space: pre-wrap; font-family: Georgia, "Times New Roman", serif;
+    font-size: 1rem; line-height: 1.6; margin-top:.35rem;
+  }
+</style>
 
 <!-- MiniSearch -->
 <script src="https://cdn.jsdelivr.net/npm/minisearch@6.1.0/dist/umd/index.min.js" defer></script>

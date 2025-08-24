@@ -3,14 +3,19 @@
 // =============== Globals ===============
 let searchIndex = null;
 let allLetters = [];
-let DOCS = new Map();          // id -> doc (authoritative store)
+let DOCS = new Map();          // id -> doc (authoritative store, includes _raw)
 let chunksLoaded = 0;
 let totalChunks = 0;
 let debounceTimer = null;
 
+let currentResultsAll = [];    // full set of matches (for export)
+let currentResultsShown = [];  // top N rendered
+
 document.addEventListener('DOMContentLoaded', async () => {
   await initializeSearch();
   wireListeners();
+  wireResultsList();
+  wireExportBar();
 });
 
 // baseurl helper
@@ -39,7 +44,8 @@ async function initializeSearch() {
         'DN_ref', 'SDN_ID',
         'sammendrag', 'brevtekst',
         'original_dato', 'original_sted', 'normalized_name',
-        'date_start', 'date_end', 'sted_all'
+        'date_start', 'date_end', 'sted_all',
+        'fotnoter', 'tillegg', 'kilde'
       ],
       searchOptions: {
         boost: { sted_all: 4, sammendrag: 3, brevtekst: 2 },
@@ -87,11 +93,16 @@ function normalizeLetter(raw, chunkIndex, rowIndex) {
   const original_sted = raw.original_sted || raw.sted || null;
   const normalized_name = raw.Normalized_name || raw.normalized_name || null;
 
+  const fotnoter = raw.fotnoter || raw.Fotnoter || '';
+  const tillegg  = raw.tillegg  || raw.Tillegg  || '';
+  const kilde    = raw.kilde    || raw.Kilde    || '';
+
   const id = `${(dn || sdn || 'doc')}#${chunkIndex}:${rowIndex}`; // unique
   const sted_all = [original_sted, normalized_name].filter(Boolean).join(' | ');
 
   return {
     id,
+    // normalized for searching + UI
     DN_ref: dn || undefined,
     SDN_ID: sdn || undefined,
     sammendrag: raw.sammendrag || '',
@@ -100,9 +111,13 @@ function normalizeLetter(raw, chunkIndex, rowIndex) {
     original_sted,
     normalized_name,
     sted_all,
-    kilde: raw.kilde || '',
+    kilde,
+    fotnoter,
+    tillegg,
     date_start: raw.date_start || null,
-    date_end: raw.date_end || null
+    date_end: raw.date_end || null,
+    // preserve original row for CSV export
+    _raw: raw
   };
 }
 
@@ -192,7 +207,12 @@ function mapScopedField(f) {
 // =============== Execution ===============
 function performSearch() {
   const q = document.getElementById('search-input').value.trim();
-  if (!searchIndex || q.length < 2) { updateResults([]); return; }
+  if (!searchIndex || q.length < 2) {
+    currentResultsAll = [];
+    updateResults([]);
+    setExportEnabled(false);
+    return;
+  }
 
   const orGroups = parseQuery(q);
   const selectedFields = fieldListForCheckboxes();
@@ -204,16 +224,17 @@ function performSearch() {
     for (const [id, score] of set) unionMap.set(id, Math.max(unionMap.get(id) || 0, score));
   }
 
-  // to array & sort
-  let results = Array.from(unionMap.entries())
+  // to array & sort (do not slice yet; we keep all for export)
+  currentResultsAll = Array.from(unionMap.entries())
     .map(([id, score]) => ({ id, score }))
     .sort((a, b) => b.score - a.score)
-    .slice(0, 200);
+    .map(r => Object.assign({}, DOCS.get(r.id) || {}, { score: r.score }));
 
-  // hydrate via DOCS (not MiniSearch internals)
-  results = results.map(r => Object.assign({}, DOCS.get(r.id) || {}, { score: r.score }));
+  // Show only top N for UI
+  currentResultsShown = currentResultsAll.slice(0, 50);
+  updateResults(currentResultsShown);
 
-  updateResults(results.slice(0, 50));
+  setExportEnabled(currentResultsAll.length > 0);
 }
 
 // AND a single group: intersect required terms, apply NOTs and year filters
@@ -252,7 +273,6 @@ function runAndGroup(group, selectedFields) {
 function parseYear(s) { const m = String(s || '').match(/^(\d{4})/); return m ? Number(m[1]) : null; }
 
 function allDocsAsSet() {
-  // used only when a group has no positive terms → cheap to build
   const m = new Map();
   for (const id of DOCS.keys()) m.set(id, 1);
   return m;
@@ -320,17 +340,52 @@ function updateResults(results) {
   const container = document.getElementById('search-results');
   if (!container) return;
 
-  if (!results || !results.length) { container.innerHTML = '<p>Ingen treff</p>'; return; }
+  if (!results || !results.length) {
+    container.innerHTML = '<p>Ingen treff</p>';
+    return;
+  }
 
-  const html = results.map(r => `
-    <div class="search-result">
-      <h3>${r.DN_ref || r.SDN_ID || 'Uten referanse'}</h3>
-      <p class="date">${r.original_dato || 'Udatert'} – ${r.normalized_name || r.original_sted || 'Ukjent sted'}</p>
-      <p class="summary">${truncate(r.sammendrag || 'Ingen sammendrag', 200)}</p>
+  const html = `
+    <p class="result-count">Viser ${results.length} av ${currentResultsAll.length} treff</p>
+    <div class="result-list">
+      ${results.map(r => {
+        const humanDate = formatDateRange(r.date_start, r.date_end, r.original_dato);
+        const archaic = dnToArchaic(r.DN_ref);
+        return `
+        <div class="search-result" data-id="${r.id}">
+          <div class="idline">
+            <span class="dn-code">${escapeHtml(r.DN_ref || 'Uten referanse')}</span>
+            <span class="dn-archaic">${escapeHtml(archaic)}</span>
+          </div>
+          <h3>
+            <button class="toggle-details" aria-expanded="false">Vis fulltekst</button>
+          </h3>
+          <p class="meta">${escapeHtml(humanDate)} – ${escapeHtml(r.normalized_name || r.original_sted || 'Ukjent sted')}</p>
+
+          <div class="details" style="display:none;">
+            <p><strong>date_start:</strong> ${escapeHtml(r.date_start || '')}
+               &nbsp;&nbsp;<strong>date_end:</strong> ${escapeHtml(r.date_end || '')}
+               &nbsp;&nbsp;<strong>Sted:</strong> ${escapeHtml(r.original_sted || 'Ukjent')}
+               &nbsp;&nbsp;<strong>Normalisert:</strong> ${escapeHtml(r.normalized_name || '—')}
+            </p>
+
+            ${section('Sammendrag', r.sammendrag, 'sammendrag')}
+            ${section('Brevtekst',   r.brevtekst,  'brevtekst')}
+            ${section('Fotnoter',    r.fotnoter,   'fotnoter')}
+            ${section('Tillegg',     r.tillegg,    'tillegg')}
+          </div>
+        </div>`;
+      }).join('')}
     </div>
-  `).join('');
+  `;
 
-  container.innerHTML = `<p class="result-count">Viser ${results.length} treff</p>${html}`;
+  container.innerHTML = html;
+}
+
+function section(label, content, cls) {
+  if (!content || !String(content).trim()) return '';
+  return `<span class="section-label">${escapeHtml(label)}</span>
+          <div class="${cls}">${escapeHtml(String(content))}</div>`;
 }
 
 function truncate(text, n) { return !text ? '' : (text.length <= n ? text : text.slice(0, n) + '…'); }
@@ -338,10 +393,152 @@ function truncate(text, n) { return !text ? '' : (text.length <= n ? text : text
 function wireListeners() {
   const input = document.getElementById('search-input');
   const button = document.getElementById('search-btn');
-
   const debounced = () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(performSearch, 200); };
-
   if (input)  input.addEventListener('input', debounced);
   if (button) button.addEventListener('click', performSearch);
   document.querySelectorAll('.search-filters input').forEach(cb => cb.addEventListener('change', performSearch));
+}
+
+function wireResultsList() {
+  const container = document.getElementById('search-results');
+  if (!container) return;
+  container.addEventListener('click', (ev) => {
+    const toggle = ev.target.closest('.toggle-details');
+    if (!toggle) return;
+    const item = ev.target.closest('.search-result');
+    const details = item.querySelector('.details');
+    const show = details.style.display === 'none' || !details.style.display;
+    details.style.display = show ? 'block' : 'none';
+    toggle.textContent = show ? 'Skjul fulltekst' : 'Vis fulltekst';
+    toggle.setAttribute('aria-expanded', String(show));
+    ev.preventDefault();
+  });
+}
+
+// =============== Export (CSV/TXT) ===============
+function wireExportBar() {
+  const bar = document.getElementById('export-bar');
+  if (!bar) return;
+  document.getElementById('export-csv').addEventListener('click', () => {
+    if (!currentResultsAll.length) return;
+    const csv = toCSV_fromRaw(currentResultsAll);
+    downloadText(csv, 'sok-treff.csv', { addBOM: true });
+  });
+  document.getElementById('export-txt').addEventListener('click', () => {
+    if (!currentResultsAll.length) return;
+    const txt = toTXT_likeDetails(currentResultsAll);
+    downloadText(txt, 'sok-treff.txt');
+  });
+}
+
+function setExportEnabled(on) {
+  const bar = document.getElementById('export-bar');
+  if (!bar) return;
+  bar.style.display = 'flex';
+  document.getElementById('export-csv').disabled = !on;
+  document.getElementById('export-txt').disabled = !on;
+}
+
+// TXT: mirror the details box; include BOTH original sted and Normalized_name
+function toTXT_likeDetails(rows) {
+  const parts = [];
+  for (const r of rows) {
+    const headerLeft  = r.DN_ref || 'Uten referanse';
+    const headerRight = dnToArchaic(r.DN_ref) || '';
+    const dateLine = formatDateRange(r.date_start, r.date_end, r.original_dato);
+    const placeOrig = r.original_sted || 'Ukjent';
+    const placeNorm = r.normalized_name || '—';
+
+    const bits = [];
+    bits.push(`${headerLeft}    ${headerRight}`);
+    bits.push(`${dateLine} — Sted: ${placeOrig} | Normalisert: ${placeNorm}`);
+    bits.push(`date_start: ${r.date_start || ''}    date_end: ${r.date_end || ''}`);
+
+    if (r.sammendrag && String(r.sammendrag).trim()) { bits.push('', 'SAMMENDRAG:', r.sammendrag); }
+    if (r.brevtekst  && String(r.brevtekst ).trim()) { bits.push('', 'BREVTEKST:',  r.brevtekst ); }
+    if (r.fotnoter   && String(r.fotnoter  ).trim()) { bits.push('', 'FOTNOTER:',   r.fotnoter  ); }
+    if (r.tillegg    && String(r.tillegg   ).trim()) { bits.push('', 'TILLEGG:',    r.tillegg   ); }
+
+    parts.push(bits.join('\n'));
+  }
+  return parts.join('\n\n---\n\n');
+}
+
+// CSV: union of keys from original JSON rows (_raw), preserving names
+function toCSV_fromRaw(rows) {
+  const keySet = new Set();
+  for (const r of rows) {
+    const raw = r._raw || {};
+    for (const k of Object.keys(raw)) keySet.add(k);
+  }
+
+  // Optional preferred order first (only if present), then the rest alpha
+  const preferred = [
+    '\ufeffSDNID','SDNID','SDN_ID','DN_REF','DN_ref','DNREF',
+    'sammendrag','kilde','nummer','dato','sted','brevtekst','fotnoter','tillegg','sidetall_bind',
+    'date_start','date_end','Normalized_name','normalized_name',
+    'lat','lon','LAT','LON','Region','Problem'
+  ];
+  const presentPreferred = preferred.filter(k => keySet.has(k));
+  const remaining = Array.from(keySet).filter(k => !presentPreferred.includes(k)).sort();
+  const headers = [...presentPreferred, ...remaining];
+
+  const esc = (v) => {
+    const s = String(v ?? '').replace(/\r?\n/g, '\n').replace(/"/g, '""');
+    return `"${s}"`;
+    };
+  const lines = [headers.join(',')];
+
+  for (const r of rows) {
+    const raw = r._raw || {};
+    const line = headers.map(h => esc(raw[h])).join(',');
+    lines.push(line);
+  }
+  return lines.join('\r\n');
+}
+
+// =============== Small utils used above ===============
+function formatDateRange(start, end, original) {
+  if (original && String(original).trim()) return String(original);
+  const ys = parseYear(start);
+  const ye = parseYear(end) ?? ys;
+  if (ys && ye) return ys === ye ? String(ys) : `${ys}–${ye}`;
+  if (ys) return String(ys);
+  if (ye) return String(ye);
+  return 'Ukjent';
+}
+function parseYear(s) { const m = String(s || '').match(/^(\d{4})/); return m ? Number(m[1]) : null; }
+function escapeHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function dnToArchaic(dn) {
+  if (!dn) return '';
+  const m = String(dn).match(/^DN(\d{3})(\d{5})$/i);
+  if (!m) return '';
+  const vol = parseInt(m[1], 10);
+  const num = parseInt(m[2], 10);
+  return `Diplomatarium Norvegicum ${toRoman(vol)}, ${num}`;
+}
+function toRoman(num) {
+  if (!Number.isFinite(num) || num <= 0) return '';
+  const map = [
+    [1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],
+    [100,'C'],[90,'XC'],[50,'L'],[40,'XL'],
+    [10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']
+  ];
+  let out = '';
+  for (const [v, s] of map) { while (num >= v) { out += s; num -= v; } }
+  return out;
+}
+function downloadText(text, filename, opts = {}) {
+  const blobParts = [];
+  if (opts.addBOM) blobParts.push('\uFEFF'); // helps Excel open UTF-8 CSVs
+  blobParts.push(text);
+  const blob = new Blob(blobParts, { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
 }
