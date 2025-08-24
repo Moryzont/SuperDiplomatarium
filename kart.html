@@ -1,33 +1,36 @@
 ---
 layout: default
 title: Utforsk brev på kart
+permalink: /kart/
 ---
 
 <div class="map-container">
   <h1>Geografisk utforskning</h1>
-  
+
   <div class="map-controls">
     <button id="draw-area">Tegn område</button>
     <button id="clear-selection">Fjern valg</button>
     <span id="selection-count"></span>
   </div>
-  
+
   <div id="map" style="height: 600px; width: 100%;"></div>
-  
   <div id="selected-letters"></div>
 </div>
 
-<!-- Leaflet -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Leaflet core (CSS is already in your layout; if not, add it there) -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 
 <!-- MarkerCluster -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
-<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" defer></script>
 
-<!-- Leaflet Draw for områdevalg -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<!-- Leaflet.Draw -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.min.js" defer></script>
 
-<!-- Kartlogikk -->
-<script src="{{ '/assets/js/map.js' | relative_url }}"></script>
+<!-- Pass the correct base to JS (this expands to /SuperDiplomatarium on GH Pages) -->
+<script>window.SITE_BASE = "{{ '' | relative_url }}";</script>
+
+<!-- Your map logic -->
+<script src="{{ '/assets/js/map.js' | relative_url }}" defer></script>
