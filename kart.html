@@ -17,9 +17,7 @@ permalink: /kart/
 
   <!-- Export toolbar (appears above result list) -->
   <div id="export-bar" class="export-bar" style="display:none;">
-    <div class="export-left">
-      <strong>Eksportér utvalg:</strong>
-    </div>
+    <div class="export-left"><strong>Eksportér utvalg:</strong></div>
     <div class="export-right">
       <button id="export-txt" disabled>Last ned TXT</button>
       <button id="export-csv" disabled>Last ned CSV</button>
@@ -46,71 +44,32 @@ permalink: /kart/
   .export-bar button[disabled] { opacity: .5; cursor: not-allowed; }
   .export-bar button:hover:not([disabled]) { background: #f0f0f0; }
 
-  /* big, comfy reading pane */
-  .letter-list {
-    max-height: 72vh;
-    overflow: auto;
-    padding-right: .5rem;
-  }
-
-  /* cards */
+  .letter-list { max-height: 72vh; overflow: auto; padding-right: .5rem; }
   .letter-item {
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.06);
-    padding: 14px 16px;
-    margin: 12px 0;
+    background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    padding: 14px 16px; margin: 12px 0;
   }
-
   .letter-item h4 { margin: 0 0 .35rem 0; font-size: 1.05rem; }
-
-  .idline {
-    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
-  }
-  .idline .dn-code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-weight: 600;
-  }
-  .idline .dn-archaic {
-    color: #555; font-style: italic; font-size: .95rem;
-  }
-
-  .letter-item .meta {
-    color: #666; margin: .15rem 0 .5rem 0; font-size: .95rem;
-  }
-
-  .letter-item .toggle-details {
-    background: none; border: none; color: #0a62d0; padding: 0; font: inherit; cursor: pointer;
-  }
+  .idline { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .idline .dn-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 600; }
+  .idline .dn-archaic { color: #555; font-style: italic; font-size: .95rem; }
+  .letter-item .meta { color: #666; margin: .15rem 0 .5rem 0; font-size: .95rem; }
+  .letter-item .toggle-details { background: none; border: none; color: #0a62d0; padding: 0; font: inherit; cursor: pointer; }
   .letter-item .toggle-details:hover { text-decoration: underline; }
-
-  .letter-item .details {
-    border-top: 1px solid #eee; margin-top: .5rem; padding-top: .6rem;
+  .letter-item .details { border-top: 1px solid #eee; margin-top: .5rem; padding-top: .6rem; }
+  .letter-item .sammendrag, .letter-item .brevtekst, .letter-item .fotnoter, .letter-item .tillegg {
+    white-space: pre-wrap; font-family: Georgia, "Times New Roman", serif; font-size: 1rem; line-height: 1.6; margin-top: .35rem;
   }
-
-  /* long-text sections */
-  .letter-item .sammendrag,
-  .letter-item .brevtekst,
-  .letter-item .fotnoter,
-  .letter-item .tillegg {
-    white-space: pre-wrap;
-    font-family: Georgia, "Times New Roman", serif;
-    font-size: 1rem; line-height: 1.6;
-    margin-top: .35rem;
-  }
-  .letter-item .section-label {
-    display: block; font-weight: 600; color: #333; margin-top: .5rem;
-  }
-
-  .map-controls button {
-    border: 1px solid #ddd; background: #f8f8f8; padding: .4rem .7rem;
-    border-radius: 8px; margin-right: .4rem; cursor: pointer;
-  }
+  .letter-item .section-label { display: block; font-weight: 600; color: #333; margin-top: .5rem; }
+  .map-controls button { border: 1px solid #ddd; background: #f8f8f8; padding: .4rem .7rem; border-radius: 8px; margin-right: .4rem; cursor: pointer; }
   .map-controls button:hover { background: #f0f0f0; }
   #selection-count { float: right; color: #666; }
 </style>
 
-<!-- Leaflet core JS (CSS is in layout's <head>) -->
+<!-- Leaflet core CSS (VIKTIG hvis den ikke ligger i layouten) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<!-- Leaflet core JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 
 <!-- MarkerCluster -->

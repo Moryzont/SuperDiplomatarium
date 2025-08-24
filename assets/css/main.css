@@ -1,189 +1,193 @@
-/* ====== Design tokens ====== */
+/* =========================================================
+   SuperDiplomatarium — main.css
+   Palett: "Golden Peachy Glow" (+ nøytraler for lesbarhet)
+   ---------------------------------------------------------
+   p-olive    #C8CBA7   (lys oliven – subtile flater/linjer)
+   p-peach    #FFE1A8   (varm “parchment”)
+   p-coral    #E26D5C   (primær aksent / knapper)
+   p-plum     #723D46   (sekundær aksent, lenker/hover)
+   p-espresso #472D30   (mørk aksent, hero-overlegg)
+   ========================================================= */
+
+/* ====== Tokens ====== */
 :root{
-    --bg: #f6f7f8;
-    --card: #ffffff;
-    --ink: #0e1116;
-    --muted: #586174;
-    --brand: #2a75d5;          /* blå aksent */
-    --brand-ink: #174c93;
-    --ring: rgba(42,117,213,.35);
-    --shadow: 0 8px 24px rgba(16,24,40,.08);
-    --radius: 16px;
+    /* Palett */
+    --p-olive:    #C8CBA7;
+    --p-peach:    #FFE1A8;
+    --p-coral:    #E26D5C;
+    --p-plum:     #723D46;
+    --p-espresso: #472D30;
+  
+    /* Nøytraler / struktur */
+    --bg:       #f6f7f8;   /* sidebakgrunn */
+    --surface:  #ffffff;   /* kort/innhold */
+    --ink:      #0f1220;   /* primær tekst */
+    --muted:    #5f6473;   /* sekundær tekst */
+    --line:     #e8e9ec;   /* linjer/border */
+  
+    /* Avledede “brand”-farger (bruk paletten) */
+    --brand:       var(--p-coral);
+    --brand-ink:   var(--p-plum);
+    --brand-peach: var(--p-peach);
+    --brand-olive: var(--p-olive);
+    --brand-dark:  var(--p-espresso);
+  
+    /* Radius & skygger */
+    --radius-lg: 16px;
+    --radius-md: 12px;
+  
+    --shadow-sm: 0 1px 3px rgba(15,18,32,.08);
+    --shadow-md: 0 8px 24px rgba(15,18,32,.10);
   }
   
   /* ====== Base ====== */
-  *{ box-sizing:border-box; }
-  html,body{ height:100%; }
+  *{ box-sizing: border-box; }
+  html, body { height: 100%; }
   body{
     margin:0;
     background: var(--bg);
     color: var(--ink);
-    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
-    line-height:1.5;
+    font: 400 16px/1.55 Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
   }
-  .container{
-    width:min(1100px, 92vw);
-    margin-inline:auto;
-  }
-  .page-content{ padding: 1.25rem 0 2.5rem; }
+  .container{ width:min(1100px, 92vw); margin-inline:auto; }
+  .page-content{ padding: 1.25rem 0 2.25rem; }
   
-  /* ====== Navbar ====== */
-  .site-header{
-    background: #263645; color:#fff;
-    box-shadow: 0 1px 0 rgba(0,0,0,.05);
-  }
+  /* ====== Header / Nav ====== */
+  .site-header{ background:#263645; color:#fff; }
   .navbar .container{
     display:flex; align-items:center; justify-content:space-between;
-    padding: .9rem .5rem;
+    padding:.9rem .5rem;
   }
-  .brand{ display:flex; align-items:baseline; gap:.15rem; text-decoration:none; color:#fff; }
+  .brand{ display:flex; align-items:baseline; gap:.2rem; text-decoration:none; color:#fff; }
   .brand-initial{
-    font-family: "EB Garamond", serif;
-    font-weight:700; font-size: 1.4rem; line-height:1;
-    background: linear-gradient(135deg, #e6d2a6, #caa55d 45%, #b48a3a);
-    -webkit-background-clip: text; background-clip:text; color:transparent;
-    letter-spacing:.5px;
-    margin-right:.1rem;
+    font-family:"EB Garamond", serif; font-weight:700; font-size:1.35rem; line-height:1;
+    /* gull→fersken→koral, subtilt hint */
+    background: linear-gradient(135deg, #E9D7AD, var(--p-peach) 45%, var(--p-coral));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    letter-spacing:.4px;
   }
-  .brand-rest{
-    font-weight:700; font-size:1.25rem; letter-spacing:.2px;
-  }
-  .nav-toggle{ display:none; background:none; border:none; color:#fff; font-size:1.35rem; }
-  .nav-links{ display:flex; gap:1.25rem; list-style:none; margin:0; padding:0; }
+  .brand-rest{ font-weight:700; font-size:1.15rem; letter-spacing:.15px; }
+  .nav-toggle{ display:none; background:none; border:none; color:#fff; font-size:1.3rem; }
+  .nav-links{ display:flex; gap:1.1rem; list-style:none; margin:0; padding:0; }
   .nav-links a{ color:#fff; text-decoration:none; font-weight:600; opacity:.95; }
-  .nav-links a:hover{ opacity:1; text-decoration:underline; text-underline-offset: 3px; }
-  
-  /* Mobile nav */
-  @media (max-width: 760px){
+  .nav-links a:hover{ opacity:1; text-decoration:underline; text-underline-offset:3px; }
+  @media (max-width:760px){
     .nav-toggle{ display:block; }
     .nav-links{ display:none; }
-    .nav-toggle.active + .nav-links{ display:flex; flex-direction:column; gap:.75rem; padding: .75rem 0; }
+    .nav-toggle.active + .nav-links{ display:flex; flex-direction:column; gap:.75rem; padding:.75rem 0; }
   }
   
-  /* ====== Hero ====== */
-  .hero{
-    padding: 2rem 0 1rem;
-  }
+  /* ====== Hero (forside): rolig, svevende, mørke aksenter i bakgrunn ====== */
+  .hero{ padding: 1.6rem 0 .6rem; }
   .hero-card{
+    /* lett pergament + mørk plum/espresso-overlegg høyt i toppen */
     background:
-      radial-gradient(1200px 600px at 50% -10%, rgba(42,117,213,.06), transparent 55%),
-      linear-gradient(0deg, rgba(234, 229, 216, .75), rgba(234, 229, 216, .75)); /* parchment hint */
-    border: 1px solid rgba(162,141,96,.25);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    padding: clamp(1.2rem, 4vw, 2.5rem);
+      radial-gradient(1100px 520px at 50% -12%, rgba(71,45,48,.22), transparent 55%),
+      linear-gradient(0deg, rgba(255,225,168,.70), rgba(255,225,168,.70));
+    border:1px solid color-mix(in oklab, var(--p-olive), black 12%);
+    border-radius: var(--radius-lg);
+    padding: clamp(1.1rem, 4vw, 2.3rem);
+    box-shadow: var(--shadow-md);
     text-align:center;
   }
   .hero-title{
     margin:0;
-    font-family: "EB Garamond", serif;
+    font-family:"EB Garamond", serif;
     font-weight:700;
     font-size: clamp(2rem, 4vw, 3rem);
     letter-spacing:.2px;
+    color: var(--p-espresso);
   }
-  .hero-sub{
-    margin:.4rem 0 1.2rem;
-    color: var(--muted);
-  }
+  .hero-sub{ margin:.35rem 0 1.1rem; color:var(--muted); }
   
   .hero-stats{
-    display:grid;
-    grid-template-columns: repeat(2, minmax(0,1fr));
-    gap: clamp(.5rem, 2vw, 2rem);
-    justify-items:center;
-    margin: 1rem 0 1.25rem;
+    display:grid; grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: clamp(.5rem, 2vw, 1.6rem); justify-items:center; margin: .8rem 0 1.1rem;
   }
-  .stat{
-    background: var(--card);
-    border-radius: 14px;
-    padding: .9rem 1rem;
-    min-width: 230px;
-    border: 1px solid #eee;
+  /* Metrikker er tekstlige, ikke “pill-buttons” */
+  .metric{ min-width:220px; padding:.2rem .3rem .6rem; }
+  .metric .value{
+    display:block; font-weight:800; color:var(--brand);
+    font-size: clamp(1.6rem, 3vw, 2.2rem); line-height:1.1;
   }
-  .stat-number{
-    font-size: clamp(1.6rem, 3vw, 2.2rem);
-    line-height:1.1;
-    color: var(--brand);
-    font-weight: 800;
-    letter-spacing:.5px;
-  }
-  .stat-label{
-    color: var(--muted);
-    margin-top:.2rem;
-    font-weight:600;
-    text-transform: lowercase;
-  }
+  .metric .label{ color:var(--muted); font-weight:600; margin-top:.2rem; text-transform: lowercase; }
   
-  /* Buttons */
+  .hero-actions{ display:flex; gap:.7rem; justify-content:center; flex-wrap:wrap; }
+  
+  /* ====== Buttons (kun på interaktive elementer) ====== */
   .btn{
-    display:inline-block;
-    border-radius: 12px;
-    padding: .7rem 1.1rem;
-    font-weight:700;
-    text-decoration:none;
+    display:inline-block; border-radius:12px; padding:.68rem 1.05rem;
+    font-weight:700; text-decoration:none; border:1px solid transparent;
     transition: transform .04s ease, box-shadow .08s ease, background .12s ease;
-    border:1px solid transparent;
   }
-  .btn:focus{ outline:none; box-shadow: 0 0 0 3px var(--ring); }
+  .btn:focus{ outline:none; box-shadow:0 0 0 3px color-mix(in oklab, var(--brand), white 60%); }
   .btn:active{ transform: translateY(1px); }
-  
-  .btn-primary{
-    background: var(--brand);
-    color:#fff;
-    border-color: var(--brand);
-  }
-  .btn-primary:hover{ background: var(--brand-ink); }
-  
+  .btn-primary{ background:var(--brand); color:#fff; border-color:var(--brand); }
+  .btn-primary:hover{ background:var(--brand-ink); }
   .btn-ghost{
-    background: #e6edf7;
+    background: color-mix(in oklab, var(--brand-peach), white 30%);
     color: var(--brand-ink);
-    border-color: #d6e2f4;
+    border-color: color-mix(in oklab, var(--brand-peach), var(--p-olive) 40%);
   }
-  .btn-ghost:hover{ background:#dbe7f7; }
+  .btn-ghost:hover{ background: color-mix(in oklab, var(--brand-peach), white 10%); }
   
-  .hero-actions{ display:flex; gap:.75rem; justify-content:center; margin-top:.25rem; flex-wrap:wrap; }
-  
-  /* ====== Selling points ====== */
-  .selling-points{ padding: 1.25rem 0 0; }
-  .points-grid{
-    display:grid; gap: clamp(.75rem, 2vw, 1.25rem);
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* ====== Kort/tekstkasser ====== */
+  .card{
+    background:var(--surface); border:1px solid var(--line);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+    padding:1rem;
   }
-  .point{
-    background: var(--card);
-    border-radius: 14px;
-    border: 1px solid #eee;
-    padding: 1rem;
-    box-shadow: 0 6px 16px rgba(16,24,40,.04);
-  }
+  .selling-points{ padding: 1rem 0 0; }
+  .points-grid{ display:grid; gap:clamp(.75rem, 2vw, 1.2rem); grid-template-columns: repeat(3, minmax(0,1fr)); }
   .point h3{
-    font-family: "EB Garamond", serif;
-    font-size: 1.25rem;
-    margin: .25rem 0 .35rem;
+    font-family:"EB Garamond", serif; font-size:1.2rem; margin:.25rem 0 .35rem;
+    color: var(--p-espresso);
   }
-  
-  /* Responsive cards */
-  @media (max-width: 920px){
-    .hero-stats{ grid-template-columns: 1fr; }
-    .points-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
-  }
-  @media (max-width: 640px){
-    .points-grid{ grid-template-columns: 1fr; }
-  }
+  @media (max-width:920px){ .points-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
+  @media (max-width:640px){ .points-grid{ grid-template-columns: 1fr; } }
   
   /* ====== Footer ====== */
-  .site-footer{
-    margin-top: 2rem;
-    padding: 1.5rem 0 2.25rem;
-    color: #6b7280;
-  }
+  .site-footer{ margin-top:2rem; padding:1.4rem 0 2rem; color:#6b7280; }
   .site-footer p{ margin:0; }
   
-  /* ====== Small utilities reused elsewhere ====== */
-  .result-count{ color: var(--muted); font-style: italic; }
-  .search-result{ background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); padding:14px 16px; margin:12px 0; }
+  /* ====== Søke-/resultatkomponenter (gjenbruk) ====== */
+  .result-count{ color:var(--muted); font-style:italic; }
+  .search-result{ background:#fff; border-radius:12px; box-shadow:var(--shadow-sm); padding:14px 16px; margin:12px 0; }
   .idline{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
-  .dn-code{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight:600; }
-  .dn-archaic{ color:#555; font-style:italic; font-size:.95rem; }
+  .dn-code{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight:600; color: var(--p-espresso); }
+  .dn-archaic{ color: color-mix(in oklab, var(--p-espresso), white 35%); font-style:italic; font-size:.95rem; }
   .section-label{ display:block; font-weight:600; color:#333; margin-top:.5rem; }
+  .result-list{ max-height:72vh; overflow:auto; padding-right:.5rem; }
+  
+  /* ====== Pagination ====== */
+  .pagination{ display:flex; flex-wrap:wrap; gap:.35rem; align-items:center; justify-content:center; margin:.5rem 0 1.2rem; }
+  .page-btn,.page-num{ border:1px solid var(--line); background:#fafafa; padding:.35rem .6rem; border-radius:8px; cursor:pointer; user-select:none; }
+  .page-btn[disabled]{ opacity:.55; cursor:not-allowed; }
+  .page-num.active{ background:var(--brand); color:#fff; border-color:var(--brand); }
+  .ellipsis{ padding:.35rem .2rem; color:#888; }
+  
+  /* ====== MAP — Leaflet: beskytt img-tiler og gi myk ramme ====== */
+  .leaflet-container img{ max-width: none !important; } /* kritisk for å hindre feilsizing */
+  .leaflet-container{
+    border-radius: var(--radius-md);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-sm);
+    background: color-mix(in oklab, var(--brand-olive), white 70%);
+  }
+  .map-controls{
+    display:flex; gap:.5rem; align-items:center; margin:.25rem 0 .4rem;
+  }
+  .map-controls .btn{ padding:.5rem .75rem; border-radius:10px; }
+  #map.map-wrap{ height: min(70vh, 760px); width: 100%; }
+  
+  /* ====== Forms (dato-felt etc.) ====== */
+  input[type="text"], input[type="search"], input:not([type]){
+    width:100%; padding:.58rem .65rem; border:1px solid var(--line); border-radius:10px;
+    background:#fff; color:var(--ink);
+  }
+  label{ color:var(--muted); font-weight:600; font-size:.95rem; }
+  
+  /* ====== Lenker ====== */
+  a{ color: var(--brand-ink); }
+  a:hover{ color: var(--p-espresso); }
   
