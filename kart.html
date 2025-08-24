@@ -17,7 +17,7 @@ permalink: /kart/
   <div id="selected-letters"></div>
 </div>
 
-<!-- Leaflet core (CSS is already in your layout; if not, add it there) -->
+<!-- Leaflet core JS (CSS should already be in your layout's <head>) -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 
 <!-- MarkerCluster -->
@@ -25,12 +25,12 @@ permalink: /kart/
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" defer></script>
 
-<!-- Leaflet.Draw -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.min.js" defer></script>
+<!-- Leaflet.Draw (correct package + correct CDN) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js" defer></script>
 
-<!-- Pass the correct base to JS (this expands to /SuperDiplomatarium on GH Pages) -->
+<!-- Pass the correct base to JS (expands to /SuperDiplomatarium on GH Pages) -->
 <script>window.SITE_BASE = "{{ '' | relative_url }}";</script>
 
-<!-- Your map logic -->
+<!-- Map logic -->
 <script src="{{ '/assets/js/map.js' | relative_url }}" defer></script>

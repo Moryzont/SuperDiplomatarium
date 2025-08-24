@@ -1,8 +1,5 @@
-// assets/js/map.js
 /* global L, window, document */
-let map;
-let markers;
-let drawnItems;
+let map, markers, drawnItems;
 let lettersData = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -24,17 +21,22 @@ function initializeMap() {
   drawnItems = new L.FeatureGroup();
   map.addLayer(drawnItems);
 
-  const drawControl = new L.Control.Draw({
-    draw: { polygon: true, rectangle: true, circle: false, marker: false, polyline: false },
-    edit: { featureGroup: drawnItems }
-  });
-  map.addControl(drawControl);
-
-  map.on('draw:created', handleAreaDrawn);
+  // Only add Leaflet.Draw if it actually loaded
+  const hasDraw = L && L.Control && typeof L.Control.Draw === 'function';
+  if (hasDraw) {
+    const drawControl = new L.Control.Draw({
+      draw: { polygon: true, rectangle: true, circle: false, marker: false, polyline: false },
+      edit: { featureGroup: drawnItems }
+    });
+    map.addControl(drawControl);
+    map.on('draw:created', handleAreaDrawn);
+  } else {
+    console.warn('Leaflet.Draw was not loaded; area selection disabled.');
+  }
 }
 
 async function loadLettersForMap() {
-  const BASE = (window.SITE_BASE || '').replace(/\/+$/, ''); // '/SuperDiplomatarium'
+  const BASE = (window.SITE_BASE || '').replace(/\/+$/, ''); // '/SuperDiplomatarium' in prod
   try {
     // 1) Load metadata
     const metaUrl = `${BASE}/data/metadata.json`;
@@ -49,16 +51,16 @@ async function loadLettersForMap() {
       if (!response.ok) throw new Error(`HTTP ${response.status} on ${chunkPath}`);
       const letters = await response.json();
 
-      const geoLetters = letters.filter(l => l.LAT && l.LON);
+      // Accept LAT/LON or lat/lon keys
+      const geoLetters = letters.filter(l => (l.LAT ?? l.lat) && (l.LON ?? l.lon));
       lettersData.push(...geoLetters);
 
       for (const letter of geoLetters) {
-        const lat = parseFloat(letter.LAT);
-        const lon = parseFloat(letter.LON);
+        const lat = parseFloat(letter.LAT ?? letter.lat);
+        const lon = parseFloat(letter.LON ?? letter.lon);
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
 
-        const marker = L.marker([lat, lon]);
-        marker.bindPopup(`
+        const marker = L.marker([lat, lon]).bindPopup(`
           <h4>${letter.DN_ref || letter.SDN_ID || 'Uten referanse'}</h4>
           <p><strong>Dato:</strong> ${letter.original_dato || 'Ukjent'}</p>
           <p><strong>Sted:</strong> ${letter.original_sted || 'Ukjent'}</p>
@@ -75,7 +77,7 @@ async function loadLettersForMap() {
   } catch (error) {
     console.error('Feil ved lasting av kartdata:', error);
     const el = document.getElementById('selected-letters');
-    if (el) el.innerHTML = `<p style="color:#b00">Klarte ikke å laste kartdata. Sjekk at <code>/medieval-letters/data</code> ligger under prosjektet og at URL-ene inkluderer <code>{{ site.baseurl }}</code>.</p>`;
+    if (el) el.innerHTML = `<p style="color:#b00">Klarte ikke å laste kartdata. Sjekk at <code>/data</code> finnes under prosjektet.</p>`;
   }
 }
 
@@ -83,10 +85,11 @@ function handleAreaDrawn(e) {
   const layer = e.layer;
   drawnItems.addLayer(layer);
 
-  // NB: getBounds() er et bounding box-søk (raskt). For polygon-innehold, bruk pointInPolygon senere.
+  // Bounding-box test (fast). For true polygon-inclusion, add a point-in-polygon later.
   const bounds = layer.getBounds();
   const selected = lettersData.filter(l => {
-    const lat = parseFloat(l.LAT), lon = parseFloat(l.LON);
+    const lat = parseFloat(l.LAT ?? l.lat);
+    const lon = parseFloat(l.LON ?? l.lon);
     return Number.isFinite(lat) && Number.isFinite(lon) && bounds.contains([lat, lon]);
   });
 
