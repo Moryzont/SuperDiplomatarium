@@ -1,17 +1,14 @@
 # basic innstillinger
 title: Diplomatariumet i ny form
 description: Digital samling av 19.000 brev fra norsk og skandinavisk middelalder
-baseurl: "/SuperDiplomatarium" 
-url: "https://Moryzont.github.io"
+baseurl: "" 
+url: ""
 
 # Jekyll innstillinger
 encoding: utf-8
 permalink: /brev/:title/
-
-# Plugins 
-plugins:
-  - jekyll-sitemap
-  - jekyll-seo-tag
+ 
+theme: null
 
 # Samlinger
 collections:
@@ -24,3 +21,4 @@ exclude:
   - .gitignore
   - Gemfile
   - Gemfile.lock
+
