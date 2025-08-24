@@ -1,24 +1,22 @@
 # basic innstillinger
 title: Diplomatariumet i ny form
 description: Digital samling av 19.000 brev fra norsk og skandinavisk middelalder
-baseurl: "" 
+baseurl: ""
 url: ""
 
-# Jekyll innstillinger
+# Build settings
+markdown: kramdown
 encoding: utf-8
-permalink: /brev/:title/
- 
-theme: null
 
-# Samlinger
-collections:
-  letters:
-    output: false 
-
-# Bygg-innstillinger
+# Exclude files from build
 exclude:
   - README.md
-  - .gitignore
   - Gemfile
   - Gemfile.lock
-
+  - .gitignore
+  - "*.csv"
+  
+# Collections (optional for now)
+collections:
+  letters:
+    output: false
