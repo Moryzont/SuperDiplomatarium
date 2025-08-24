@@ -1,24 +1,47 @@
 ---
 layout: default
+title: SuperDiplomatarium
+letters_count: 19114
+period_start: 1196
+period_end: 1570
 ---
 
-<div class="hero">
-  <h1>{{ site.title }}</h1>
-  <p>{{ site.description }}</p>
-  
-  <div class="stats">
-    <div class="stat-card">
-      <h3>19 000+</h3>
-      <p>Brev i samlingen</p>
+<section class="hero">
+  <div class="hero-card">
+    <h1 class="hero-title">SuperDiplomatarium</h1>
+    <p class="hero-sub">Digital utforskning av norske middelalderbrev</p>
+
+    <div class="hero-stats">
+      <div class="stat">
+        <div class="stat-number">{{ page.letters_count }}</div>
+        <div class="stat-label">brev i samlingen</div>
+      </div>
+      <div class="stat">
+        <div class="stat-number">{{ page.period_start }}–{{ page.period_end }}</div>
+        <div class="stat-label">tidsperiode</div>
+      </div>
     </div>
-    <div class="stat-card">
-      <h3>1200-1570</h3>
-      <p>Tidsperiode</p>
+
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="{{ '/sok/' | relative_url }}">Søk i brevene</a>
+      <a class="btn btn-ghost"   href="{{ '/kart/' | relative_url }}">Utforsk på kart</a>
     </div>
   </div>
-  
-  <div class="actions">
-    <a href="{{ '/sok' | relative_url }}" class="btn btn-primary">Søk i brevene</a>
-    <a href="{{ '/kart' | relative_url }}" class="btn btn-secondary">Utforsk på kart</a>
+</section>
+
+<section class="selling-points">
+  <div class="points-grid">
+    <article class="point">
+      <h3>Smidig søk</h3>
+      <p>Frasesøk, feltavgrensning og nøyaktige dato-intervaller. Eksporter treff som TXT eller CSV.</p>
+    </article>
+    <article class="point">
+      <h3>Kart og geografi</h3>
+      <p>Filtrer på sted og normaliserte stedsnavn. Tegn områder og les brevene direkte i kartet.</p>
+    </article>
+    <article class="point">
+      <h3>Akademisk integritet</h3>
+      <p>Bevarer kildehenvisninger, tillegg og fotnoter – klare til bruk i forskning og undervisning.</p>
+    </article>
   </div>
-</div>
+</section>

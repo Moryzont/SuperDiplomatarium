@@ -3,36 +3,48 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% if page.title %}{{ page.title }} | {% endif %}{{ site.title }}</title>
-  <meta name="description" content="{{ page.description | default: site.description }}">
-  
+  <title>{% if page.title %}{{ page.title }} | {% endif %}{{ site.title | default: "SuperDiplomatarium" }}</title>
+  <meta name="description" content="{{ page.description | default: site.description | default: 'Digital forskningsportal for norske middelalderbrev' }}">
+
+  <!-- Fonts: moderne + klassisk -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=EB+Garamond:wght@500;700&display=swap" rel="stylesheet">
+
   <!-- CSS -->
   <link rel="stylesheet" href="{{ '/assets/css/main.css' | relative_url }}">
-  
-  <!-- Leaflet for kart -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+  <!-- Base-URL tilgjengelig for JS -->
+  <script>window.SITE_BASE = "{{ '' | relative_url }}";</script>
 </head>
 <body>
-  <nav class="navbar">
-    <div class="container">
-      <a href="{{ '/' | relative_url }}" class="brand">Middelalder Brev</a>
-      <ul class="nav-links">
-        <li><a href="{{ '/sok' | relative_url }}">Søk</a></li>
-        <li><a href="{{ '/kart' | relative_url }}">Kart</a></li>
-        <li><a href="{{ '/om' | relative_url }}">Om samlingen</a></li>
-      </ul>
-    </div>
-  </nav>
-  
-  <main class="container">
+  <header class="site-header">
+    <nav class="navbar">
+      <div class="container">
+        <a href="{{ '/' | relative_url }}" class="brand">
+          <!-- Liten dekorativ initial -->
+          <span class="brand-initial">S</span><span class="brand-rest">uperDiplomatarium</span>
+        </a>
+        <button class="nav-toggle" aria-label="Meny">☰</button>
+        <ul class="nav-links">
+          <li><a href="{{ '/sok/'  | relative_url }}">Søk</a></li>
+          <li><a href="{{ '/kart/' | relative_url }}">Kart</a></li>
+          <li><a href="{{ '/om/'   | relative_url }}">Om samlingen</a></li>
+        </ul>
+      </div>
+    </nav>
+  </header>
+
+  <main class="container page-content">
     {{ content }}
   </main>
-  
-  <footer>
-    <p>&copy; 2025 {{ site.title }}</p>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>© {{ "now" | date: "%Y" }} {{ site.title | default: "SuperDiplomatarium" }}</p>
+    </div>
   </footer>
-  
-  <!-- JavaScript lastes inn på slutten -->
-  <script src="{{ '/assets/js/main.js' | relative_url }}"></script>
+
+  <!-- Merk: vi laster ikke noe 'main.js' (filen finnes ikke) -->
 </body>
 </html>
