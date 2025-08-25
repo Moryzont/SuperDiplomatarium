@@ -394,3 +394,72 @@
   background: var(--green-200); color: var(--green-800);
   font-weight:700; margin-bottom:.6rem;
 }
+/* ========================= Landing (linear) ========================= */
+
+/* 2) Information block */
+.intro{ padding: clamp(22px, 4vw, 48px) 0 clamp(8px, 2vw, 18px); }
+.intro__inner{ text-align: left; max-width: 980px; }
+.intro__title{
+  margin: 0 0 .35rem;
+  font-family: "Junicode","EB Garamond",Georgia,serif;
+  font-weight: 600; letter-spacing:.2px; line-height:1.05; color: var(--green-900);
+}
+.intro__lead{
+  margin: 0 0 .8rem; color: #3f4933;
+  font-size: clamp(1rem, .3vw + 1rem, 1.125rem); max-width: 70ch;
+}
+.intro__stats{ display:flex; gap:.6rem; flex-wrap:wrap; }
+.chip{
+  display:inline-flex; align-items:center; gap:.35rem;
+  background:#fff; border:1px solid #e9eedf; border-radius:999px;
+  padding:.42rem .75rem; color: var(--green-900);
+  box-shadow: 0 4px 18px rgba(0,0,0,.06);
+}
+.chip strong{ font-weight:700; }
+
+/* 3) CTA cards (Search / Map) */
+.cta{ padding: clamp(10px, 2vw, 20px) 0 clamp(22px, 4vw, 40px); }
+.cta__grid{
+  display:grid; grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: clamp(14px, 2.5vw, 24px);
+}
+@media (max-width: 900px){ .cta__grid{ grid-template-columns: 1fr; } }
+
+.cta-card{
+  position: relative;
+  display: grid; grid-template-rows: auto auto 1fr auto; align-content:start;
+  gap: .45rem;
+  background:#fff; color: inherit; text-decoration:none;
+  border:1px solid #e9eedf; border-radius:16px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.08); /* even on all edges */
+  padding: clamp(14px, 2.2vw, 18px);
+  transition: transform .08s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.cta-card:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 14px 36px rgba(0,0,0,.10);
+  border-color: #e2eadc;
+}
+.cta-card__icon{
+  width:40px;height:40px;border-radius:50%;
+  display:grid;place-items:center;
+  background: var(--green-200); color: var(--green-800);
+  font-size: 20px; font-weight: 700;
+}
+.cta-card__title{ margin:.2rem 0 .15rem; color: var(--green-900); font-weight:700; }
+.cta-card__text{ margin:0; color:#3f4933; }
+.cta-card__arrow{
+  margin-top:.2rem; font-weight:700; color: var(--green-800);
+  justify-self: end;
+}
+
+/* 4) About card */
+.about{ padding: 4px 0 clamp(28px, 5vw, 60px); }
+.about__inner{ max-width: 980px; }
+.about__card{
+  background:#fff; border:1px solid #e9eedf; border-radius:16px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.08);
+  padding: clamp(14px, 2.2vw, 20px);
+}
+.about__card h2{ margin:.1rem 0 .4rem; color: var(--green-900); }
+.about__card p{ margin:0 0 .8rem; color:#3f4933; }

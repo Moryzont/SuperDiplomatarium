@@ -6,68 +6,50 @@ period_start: c1000
 period_end: c1570
 ---
 
-<!-- HERO: two equal cards -->
-<section class="hero hero--tight">
-  <div class="container hero__grid">
-    
-    <!-- Left: unified stats + CTAs -->
-    <div class="panel panel--primary" aria-label="Hurtigstart">
-      <div class="panel__body">
-        <div class="stats-row" aria-label="Nøkkeltall">
-          <span class="stat"><strong>{{ page.letters_count }}</strong> brev</span>
-          <span class="dot" aria-hidden="true">•</span>
-          <span class="stat"><strong>{{ page.period_start }}–{{ page.period_end }}</strong> periode</span>
-        </div>
+<!-- 2) First information block -->
+<section class="intro">
+  <div class="container intro__inner">
+    <h1 class="intro__title">Norske middelalderbrev – åpent og søkbart</h1>
+    <p class="intro__lead">
+      Utforsk brevsamlingen med presist søk, normaliserte stedsnavn og trofast gjengivelse av fotnoter og tillegg.
+    </p>
 
-        <div class="cta-row">
-          <a class="btn btn-primary" href="{{ '/sok/' | relative_url }}">Søk i brevene</a>
-          <a class="btn btn-ghost"   href="{{ '/kart/' | relative_url }}">Utforsk på kart</a>
-        </div>
-      </div>
+    <div class="intro__stats" aria-label="Nøkkeltall">
+      <span class="chip"><strong>{{ page.letters_count }}</strong> brev</span>
+      <span class="chip"><strong>{{ page.period_start }}–{{ page.period_end }}</strong> periode</span>
     </div>
-
-    <!-- Right: “Hva kan du gjøre?” -->
-    <aside class="panel panel--info" aria-label="Hva kan du gjøre?">
-      <div class="panel__body">
-        <h2>Hva kan du gjøre?</h2>
-        <ul class="bullets">
-          <li>Frasesøk og feltavgrensning</li>
-          <li>Eksakte dato-intervaller</li>
-          <li>Geografisk filtrering og tegning av områder</li>
-          <li>Eksport til TXT/CSV</li>
-        </ul>
-        <a class="link-cta" href="{{ '/om/' | relative_url }}">Om samlingen →</a>
-      </div>
-    </aside>
-
   </div>
-
-  <!-- soft background blobs -->
-  <div class="blob blob--tl" aria-hidden="true"></div>
-  <div class="blob blob--br" aria-hidden="true"></div>
 </section>
 
-<!-- FEATURES: full-card links -->
-<section class="features">
-  <div class="container">
-    <div class="features__grid">
-      <a class="feature feature--link" href="{{ '/sok/' | relative_url }}" aria-label="Gå til søk">
-        <div class="icon" aria-hidden="true">↻</div>
-        <h3>Smidig søk</h3>
-        <p>Frasesøk, feltavgrensning og nøyaktige dato-intervaller. Eksporter treff som TXT eller CSV.</p>
-      </a>
+<!-- 3) Links to search and map -->
+<section class="cta">
+  <div class="container cta__grid">
+    <a class="cta-card" href="{{ '/sok/' | relative_url }}" aria-label="Søk i brevene">
+      <div class="cta-card__icon" aria-hidden="true">🔎</div>
+      <h2 class="cta-card__title">Søk i brevene</h2>
+      <p class="cta-card__text">Frasesøk, feltavgrensning og daterte intervaller. Eksporter som TXT eller CSV.</p>
+      <span class="cta-card__arrow" aria-hidden="true">→</span>
+    </a>
 
-      <a class="feature feature--link" href="{{ '/kart/' | relative_url }}" aria-label="Gå til kart">
-        <div class="icon" aria-hidden="true">📍</div>
-        <h3>Kart og geografi</h3>
-        <p>Filtrer på sted og normaliserte navn. Tegn områder og les brevene direkte i kartet.</p>
-      </a>
+    <a class="cta-card" href="{{ '/kart/' | relative_url }}" aria-label="Utforsk på kart">
+      <div class="cta-card__icon" aria-hidden="true">🗺️</div>
+      <h2 class="cta-card__title">Utforsk på kart</h2>
+      <p class="cta-card__text">Filtrer på sted og normaliserte navn. Tegn områder og åpne brevene direkte i kartet.</p>
+      <span class="cta-card__arrow" aria-hidden="true">→</span>
+    </a>
+  </div>
+</section>
 
-      <a class="feature feature--link" href="{{ '/om/' | relative_url }}" aria-label="Les om samlingen">
-        <div class="icon" aria-hidden="true">≣</div>
-        <h3>Akademisk integritet</h3>
-        <p>Bevarer kildehenvisninger, tillegg og fotnoter – klare til bruk i forskning og undervisning.</p>
-      </a>
-    </div>
+<!-- 4) More information / about -->
+<section class="about">
+  <div class="container about__inner">
+    <article class="about__card">
+      <h2>Om samlingen</h2>
+      <p>
+        SuperDiplomatarium samler transkripsjoner og metadata fra norske middelalderbrev. Prosjektet prioriterer
+        akademisk integritet og etterprøvbarhet – kilder, fotnoter og tillegg bevares uten å forenkles.
+      </p>
+      <a class="btn btn-ghost" href="{{ '/om/' | relative_url }}">Les mer om samlingen</a>
+    </article>
   </div>
 </section>
