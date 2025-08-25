@@ -6,50 +6,40 @@ period_start: c1000
 period_end: c1570
 ---
 
-<!-- 2) First information block -->
-<section class="intro">
-  <div class="container intro__inner">
-    <h1 class="intro__title">Norske middelalderbrev – åpent og søkbart</h1>
-    <p class="intro__lead">
-      Utforsk brevsamlingen med presist søk, normaliserte stedsnavn og trofast gjengivelse av fotnoter og tillegg.
-    </p>
+<section class="fig-landing">
+  <div class="container">
 
-    <div class="intro__stats" aria-label="Nøkkeltall">
-      <span class="chip"><strong>{{ page.letters_count }}</strong> brev</span>
-      <span class="chip"><strong>{{ page.period_start }}–{{ page.period_end }}</strong> periode</span>
-    </div>
-  </div>
-</section>
+    <!-- Kort 1: Intro + Søk/Kart -->
+    <article class="fig-card">
+      <h2 class="fig-h2">Diplomatarium Norvegicum – i ny form</h2>
 
-<!-- 3) Links to search and map -->
-<section class="cta">
-  <div class="container cta__grid">
-    <a class="cta-card" href="{{ '/sok/' | relative_url }}" aria-label="Søk i brevene">
-      <div class="cta-card__icon" aria-hidden="true">🔎</div>
-      <h2 class="cta-card__title">Søk i brevene</h2>
-      <p class="cta-card__text">Frasesøk, feltavgrensning og daterte intervaller. Eksporter som TXT eller CSV.</p>
-      <span class="cta-card__arrow" aria-hidden="true">→</span>
-    </a>
-
-    <a class="cta-card" href="{{ '/kart/' | relative_url }}" aria-label="Utforsk på kart">
-      <div class="cta-card__icon" aria-hidden="true">🗺️</div>
-      <h2 class="cta-card__title">Utforsk på kart</h2>
-      <p class="cta-card__text">Filtrer på sted og normaliserte navn. Tegn områder og åpne brevene direkte i kartet.</p>
-      <span class="cta-card__arrow" aria-hidden="true">→</span>
-    </a>
-  </div>
-</section>
-
-<!-- 4) More information / about -->
-<section class="about">
-  <div class="container about__inner">
-    <article class="about__card">
-      <h2>Om samlingen</h2>
-      <p>
-        SuperDiplomatarium samler transkripsjoner og metadata fra norske middelalderbrev. Prosjektet prioriterer
-        akademisk integritet og etterprøvbarhet – kilder, fotnoter og tillegg bevares uten å forenkles.
+      <p class="fig-lead">
+        Utforsk diplomsamlingen med en ny søkemotor, normaliserte stedsnavn
+        og ved hjelp av kart. Samlingen inneholder {{ page.letters_count }} diplomer,
+        fra omtrent år {{ page.period_start }} til rett før {{ page.period_end }}.
       </p>
-      <a class="btn btn-ghost" href="{{ '/om/' | relative_url }}">Les mer om samlingen</a>
+
+      <div class="fig-actions">
+        <a href="{{ '/sok/'  | relative_url }}" class="btn-olive">Søk</a>
+        <a href="{{ '/kart/' | relative_url }}" class="btn-olive">Kart</a>
+      </div>
     </article>
+
+    <!-- Kort 2: Om prosjektet -->
+    <article class="fig-card">
+      <h2 class="fig-h2">Om prosjektet</h2>
+
+      <p class="fig-lead fig-lead--narrow">
+        På denne siden kan du finne det samme diplommaterialet som du kan finne
+        i bøker og på nettet, men jeg har også stedskodet de fleste diplomene,
+        og standardisert datoene – noe som betyr at det kan være lettere for deg
+        å finne fram i samlingen.
+      </p>
+
+      <div class="fig-actions">
+        <a href="{{ '/om/' | relative_url }}" class="btn-olive">Les mer</a>
+      </div>
+    </article>
+
   </div>
 </section>
