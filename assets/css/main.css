@@ -322,4 +322,75 @@
     margin-bottom: .6rem;
   }
   .icon svg{ width: 22px; height: 22px; display:block; }
-  
+
+  /* ===================== Tighter, unified hero ===================== */
+
+.hero--tight{ position:relative; padding: clamp(24px, 4vw, 44px) 0 clamp(34px, 6vw, 64px); overflow:hidden; }
+
+/* two equal cards */
+.hero__grid{
+  display:grid; grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: clamp(16px, 2.5vw, 28px);
+  align-items: stretch;  /* equal heights */
+}
+@media (max-width: 900px){ .hero__grid{ grid-template-columns: 1fr; } }
+
+/* panels (balanced shadow on all edges) */
+.panel{
+  background:#fff; border:1px solid #e9eedf; border-radius:16px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.08); /* symmetric */
+  display:flex; height:100%;
+}
+.panel__body{ padding: clamp(16px, 2.2vw, 22px); display:flex; flex-direction:column; gap:.9rem; }
+
+/* left card: compact stats + CTAs */
+.stats-row{
+  display:inline-flex; gap:.7rem; align-items:center;
+  background:#fff; border:1px solid #e9eedf; border-radius:999px; padding:.42rem .75rem;
+  color: var(--green-900); box-shadow: 0 4px 18px rgba(0,0,0,.05);
+  width:max-content;
+}
+.stat strong{ font-weight:700; }
+.dot{ opacity:.6; }
+.cta-row{ display:flex; gap:.6rem; flex-wrap:wrap; }
+.panel--primary .btn{ border-radius:14px; }
+
+/* right card */
+.panel--info h2{
+  margin:0 0 .2rem; font: 700 1.05rem/1.2 "Inter", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+  color: var(--green-900);
+}
+.bullets{ margin:.1rem 0 .4rem 1.1rem; }
+.link-cta{ color: var(--green-800); font-weight:600; text-decoration:none; }
+.link-cta:hover{ text-decoration:underline; }
+
+/* soft background blobs in palette */
+.blob{ position:absolute; pointer-events:none; z-index:-1; opacity:.55; filter: blur(30px); }
+.blob--tl{ width:42vw; height:42vw; top:-18vw; left:-10vw; background: radial-gradient(closest-side, var(--green-200), rgba(0,0,0,0)); }
+.blob--br{ width:46vw; height:46vw; bottom:-22vw; right:-18vw; background: radial-gradient(closest-side, #f3ffe9, rgba(0,0,0,0)); }
+
+/* ===================== Feature cards as links ===================== */
+.features{ padding: clamp(18px, 5vw, 52px) 0; }
+.features__grid{
+  display:grid; grid-template-columns: repeat(3, minmax(0,1fr));
+  gap: clamp(14px, 2.5vw, 24px);
+}
+@media (max-width: 900px){ .features__grid{ grid-template-columns: 1fr; } }
+
+.feature{
+  background:#fff; border:1px solid #e9eedf; border-radius:14px;
+  padding: clamp(14px, 2.2vw, 18px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.08); /* even on all sides */
+  color: inherit; text-decoration:none; display:block;
+  transition: transform .08s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.feature:hover{ transform: translateY(-1px); box-shadow: 0 12px 30px rgba(0,0,0,.10); border-color:#e2eadc; }
+.feature h3{ margin:.2rem 0 .35rem; color: var(--green-900); font-weight:700; }
+.feature p{ margin:0; color:#3f4933; }
+
+.icon{
+  width: 40px; height: 40px; border-radius: 50%;
+  display:grid; place-items:center;
+  background: var(--green-200); color: var(--green-800);
+  font-weight:700; margin-bottom:.6rem;
+}

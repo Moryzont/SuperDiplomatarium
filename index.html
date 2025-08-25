@@ -6,67 +6,68 @@ period_start: c1000
 period_end: c1570
 ---
 
-<section class="hero hero--modern">
-  <div class="container hero__inner">
-    <div class="hero__left">
-      <p class="kicker">Digital utforskning av middelalderbrev</p>
+<!-- HERO: two equal cards -->
+<section class="hero hero--tight">
+  <div class="container hero__grid">
+    
+    <!-- Left: unified stats + CTAs -->
+    <div class="panel panel--primary" aria-label="Hurtigstart">
+      <div class="panel__body">
+        <div class="stats-row" aria-label="Nøkkeltall">
+          <span class="stat"><strong>{{ page.letters_count }}</strong> brev</span>
+          <span class="dot" aria-hidden="true">•</span>
+          <span class="stat"><strong>{{ page.period_start }}–{{ page.period_end }}</strong> periode</span>
+        </div>
 
-      <h1 class="hero-title">SuperDiplomatarium</h1>
-
-      <p class="lead">
-        Søk, filtrer og utforsk den norske brevtradisjonen. Nøyaktige datoer,
-        normaliserte stedsnavn og trofast gjengivelse av fotnoter og tillegg.
-      </p>
-
-      <div class="stats-pill" aria-label="Nøkkeltall">
-        <span><strong>{{ page.letters_count }}</strong> brev</span>
-        <span>•</span>
-        <span><strong>{{ page.period_start }}–{{ page.period_end }}</strong> periode</span>
-      </div>
-
-      <div class="hero-actions">
-        <a class="btn btn-primary" href="{{ '/sok/' | relative_url }}">Søk i brevene</a>
-        <a class="btn btn-ghost"   href="{{ '/kart/' | relative_url }}">Utforsk på kart</a>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="{{ '/sok/' | relative_url }}">Søk i brevene</a>
+          <a class="btn btn-ghost"   href="{{ '/kart/' | relative_url }}">Utforsk på kart</a>
+        </div>
       </div>
     </div>
 
-    <aside class="hero__card" aria-label="Hva kan du gjøre?">
-      <h2>Hva kan du gjøre?</h2>
-      <ul class="hero__list">
-        <li>Frasesøk og feltavgrensning</li>
-        <li>Eksakte dato-intervaller</li>
-        <li>Geografisk filtrering og tegning av områder</li>
-        <li>Eksport til TXT/CSV</li>
-      </ul>
-      <a class="link-cta" href="{{ '/om/' | relative_url }}">Om samlingen →</a>
+    <!-- Right: “Hva kan du gjøre?” -->
+    <aside class="panel panel--info" aria-label="Hva kan du gjøre?">
+      <div class="panel__body">
+        <h2>Hva kan du gjøre?</h2>
+        <ul class="bullets">
+          <li>Frasesøk og feltavgrensning</li>
+          <li>Eksakte dato-intervaller</li>
+          <li>Geografisk filtrering og tegning av områder</li>
+          <li>Eksport til TXT/CSV</li>
+        </ul>
+        <a class="link-cta" href="{{ '/om/' | relative_url }}">Om samlingen →</a>
+      </div>
     </aside>
+
   </div>
 
-  <!-- Decorative background blobs (CSS only) -->
+  <!-- soft background blobs -->
   <div class="blob blob--tl" aria-hidden="true"></div>
   <div class="blob blob--br" aria-hidden="true"></div>
 </section>
 
+<!-- FEATURES: full-card links -->
 <section class="features">
   <div class="container">
     <div class="features__grid">
-      <article class="feature">
-        <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 18a8 8 0 1 1 5.292-14.001l4.707 4.707-1.414 1.414-4.2-4.2A6 6 0 1 0 10 16v2z" fill="currentColor"/></svg></div>
+      <a class="feature feature--link" href="{{ '/sok/' | relative_url }}" aria-label="Gå til søk">
+        <div class="icon" aria-hidden="true">↻</div>
         <h3>Smidig søk</h3>
         <p>Frasesøk, feltavgrensning og nøyaktige dato-intervaller. Eksporter treff som TXT eller CSV.</p>
-      </article>
+      </a>
 
-      <article class="feature">
-        <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z" fill="currentColor"/></svg></div>
+      <a class="feature feature--link" href="{{ '/kart/' | relative_url }}" aria-label="Gå til kart">
+        <div class="icon" aria-hidden="true">📍</div>
         <h3>Kart og geografi</h3>
         <p>Filtrer på sted og normaliserte navn. Tegn områder og les brevene direkte i kartet.</p>
-      </article>
+      </a>
 
-      <article class="feature">
-        <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v2H4V4zm0 4h10v2H4V8zm0 4h16v2H4v-2zm0 4h10v2H4v-2z" fill="currentColor"/></svg></div>
+      <a class="feature feature--link" href="{{ '/om/' | relative_url }}" aria-label="Les om samlingen">
+        <div class="icon" aria-hidden="true">≣</div>
         <h3>Akademisk integritet</h3>
         <p>Bevarer kildehenvisninger, tillegg og fotnoter – klare til bruk i forskning og undervisning.</p>
-      </article>
+      </a>
     </div>
   </div>
 </section>
