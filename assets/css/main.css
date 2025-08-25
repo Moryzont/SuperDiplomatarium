@@ -1,200 +1,145 @@
-/* ================= Superdiplomatarium – Base Theme ================ */
+/* SuperDiplomatarium – UI overrides:
+   - Carolingian-ish display face for headings (Junicode)
+   - Buttons consistent with site greens
+   - Dark-green checkboxes/radios (no blue)
+   - Gentle defaults only; minimal risk to the rest of your CSS
+*/
 
-/* --- Palette (adjust to your brand) --- */
-:root {
-    --bg-cream: #fff8e6;
-    --ink: #233014;
-  
-    --green-950: #183a18;
-    --green-900: #1f4b1e;
-    --green-800: #2e5c2b;
-    --green-700: #3a6b34;   /* PRIMARY */
-    --green-600: #4f7d45;   /* hover */
-    --green-300: #b9d0b6;
-    --green-200: #dfeadf;
-  
-    --ring: rgba(58,107,52,.35);
-    --radius: 12px;
-    --shadow-1: 0 1px 2px rgba(0,0,0,.06);
-    --shadow-2: 0 6px 20px rgba(0,0,0,.06);
+/* Load fonts without touching <head> */
+@import url("https://fonts.googleapis.com/css2?family=Junicode:wght@400;600;700&family=EB+Garamond:wght@400;600&display=swap");
+
+/* ---------- Theme tokens ---------- */
+:root{
+  --bg-cream: #FFF8E6;
+  --ink: #233014;
+
+  --green-950: #183a18;
+  --green-900: #1f4b1e;
+  --green-800: #2e5c2b;
+  --green-700: #3a6b34;   /* primary */
+  --green-600: #4f7d45;   /* hover */
+  --green-300: #b9d0b6;
+  --green-200: #dfeadf;
+
+  --radius: 12px;
+  --ring: rgba(58,107,52,.35);
+}
+
+/* ---------- Page base (very light touch) ---------- */
+html, body { background: var(--bg-cream); color: var(--ink); }
+
+/* ---------- Headings: Carolingian vibe ---------- */
+.hero-title,
+.site-brand,
+h1.site-title {
+  font-family: "Junicode", "EB Garamond", Georgia, serif;
+  font-weight: 600;
+  letter-spacing: .2px;
+  line-height: 1.05;
+  color: var(--green-900);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  font-variant-ligatures: common-ligatures;
+  font-feature-settings: "liga" 1, "hlig" 1, "ss01" 1;
+}
+/* give the initial a touch more gravitas without weird dropcaps */
+.hero-title::first-letter { font-weight: 700; letter-spacing: .1px; }
+
+/* ---------- Buttons (match site greens) ---------- */
+.btn{
+  --bg: var(--green-700);
+  --bg-h: var(--green-600);
+  --fg: #fff;
+
+  display:inline-flex; align-items:center; justify-content:center;
+  gap:.45rem;
+  appearance: none;
+  border: 1px solid transparent;
+  background: var(--bg);
+  color: var(--fg);
+  border-radius: var(--radius);
+  padding: .62rem 1.0rem;
+  font: 600 .98rem/1 "Inter", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
+        Arial, "Noto Sans", "Liberation Sans", sans-serif;
+  box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 1px 3px rgba(0,0,0,.06) inset;
+  cursor: pointer;
+  transition: background .15s ease, box-shadow .15s ease, transform .02s ease;
+  text-decoration: none; /* for <a class="btn"> */
+}
+.btn:hover{ background: var(--bg-h); }
+.btn:active{ transform: translateY(1px); }
+.btn:focus-visible{ outline: none; box-shadow: 0 0 0 3px var(--ring); }
+
+/* Primary/ghost variants you already use */
+.btn-primary{
+  --bg: var(--green-700);
+  --bg-h: var(--green-600);
+  color: #fff; border-color: transparent;
+}
+.btn-ghost{
+  --bg: #fff; --bg-h: #fff;
+  color: var(--green-800);
+  border: 1px solid var(--green-700);
+  box-shadow: none;
+}
+.btn-ghost:hover{ background: var(--green-200); }
+
+/* If your buttons are <input type="submit">, keep the look */
+button.btn, input[type="submit"].btn { all: unset; }
+button.btn, input[type="submit"].btn {
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:.62rem 1.0rem; border-radius: var(--radius);
+  background: var(--green-700); color:#fff; border:1px solid transparent;
+  font: 600 .98rem/1 "Inter", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
+        Arial, "Noto Sans", "Liberation Sans", sans-serif;
+  cursor: pointer; transition: background .15s ease, box-shadow .15s ease, transform .02s ease;
+}
+button.btn:hover, input[type="submit"].btn:hover { background: var(--green-600); }
+
+/* ---------- Inputs in the search UI (gentle) ---------- */
+input[type="search"],
+input[type="text"],
+input[type="date"]{
+  border: 1px solid #d7decc; background:#fff; color: var(--ink);
+  border-radius: var(--radius);
+  padding: .6rem .75rem;
+}
+input[type="search"]::placeholder{ color:#9aa48f; }
+
+/* ---------- Checkboxes / radios: dark green, not blue ---------- */
+input[type="checkbox"], input[type="radio"]{
+  accent-color: var(--green-800);
+}
+
+/* Fallback for very old browsers (scoped to filter area to stay safe) */
+.filters input[type="checkbox"], .filters input[type="radio"]{
+  /* modern browsers will ignore this block due to the @supports below */
+}
+@supports not (accent-color: red){
+  .filters label { display:inline-flex; align-items:center; gap:.5rem; }
+  .filters input[type="checkbox"], .filters input[type="radio"]{
+    appearance: none; width: 1.05rem; height: 1.05rem;
+    border: 2px solid var(--green-700); border-radius: .25rem;
+    background: #fff; position: relative; cursor: pointer;
   }
-  
-  /* --- Global reset --- */
-  *,
-  *::before,
-  *::after { box-sizing: border-box; }
-  html, body { height: 100%; }
-  body {
-    margin: 0;
-    background: var(--bg-cream);
-    color: var(--ink);
-    font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
-          Arial, "Noto Sans", "Liberation Sans", sans-serif;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
+  .filters input[type="radio"]{ border-radius: 50%; }
+  .filters input[type="checkbox"]:checked::after{
+    content:""; position:absolute; inset: .15rem;
+    background:
+      linear-gradient(45deg, transparent 45%, var(--green-700) 45% 55%, transparent 55%),
+      linear-gradient(-45deg, transparent 55%, var(--green-700) 55% 65%, transparent 65%);
   }
-  
-  .container {
-    width: min(1100px, 92vw);
-    margin-inline: auto;
+  .filters input[type="radio"]:checked::after{
+    content:""; position:absolute; inset: .25rem; border-radius:50%; background: var(--green-700);
   }
-  
-  /* ================= Header / Brand ================= */
-  .site-header { padding: 28px 0 10px; }
-  
-  .site-brand{
-    margin: 0;
-    font-family: "Junicode", "EB Garamond", Georgia, serif;
-    font-weight: 600;
-    letter-spacing: .2px;
-    font-size: clamp(32px, 5vw, 60px);
-    line-height: 1.05;
-    color: var(--green-900);
-    font-variant-ligatures: common-ligatures;
-    font-feature-settings: "liga" 1, "hlig" 1, "ss01" 1;
-  }
-  .site-brand .initial{
-    font-weight: 700;
-    letter-spacing: .1px;
-    margin-right: .02em;
-  }
-  
-  /* ================= Search Card ================= */
-  .site-main { padding: 18px 0 48px; }
-  
-  .search-card{
-    background: #fff;
-    border: 1px solid #e9eedf;
-    border-radius: 16px;
-    padding: 22px 22px 26px;
-    box-shadow: var(--shadow-2);
-  }
-  .search-card > h2{
-    margin: 0 0 12px 0;
-    font: 600 24px/1.2 "Inter", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
-          Arial, "Noto Sans", "Liberation Sans", sans-serif;
-    color: var(--green-950);
-  }
-  
-  /* --- Search bar --- */
-  .search-bar{
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: .8rem;
-    align-items: center;
-    margin: 8px 0 14px;
-  }
-  .search-bar input[type="search"]{
-    width: 100%;
-    border: 1px solid #d7decc;
-    border-radius: 14px;
-    background: #fff;
-    color: var(--ink);
-    padding: .8rem 1rem;
-    font-size: 1.05rem;
-    box-shadow: var(--shadow-1);
-  }
-  .search-bar input[type="search"]::placeholder{ color:#9aa48f; }
-  
-  /* --- Filters area --- */
-  .filters { border: 0; margin: 0; padding: 0; }
-  .sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
-  
-  .checks{
-    display: flex; flex-wrap: wrap; gap: .9rem 1.1rem;
-    margin-bottom: .6rem;
-  }
-  
-  .date-range{
-    display: flex; flex-wrap: wrap; gap: .7rem 1rem; align-items: center;
-  }
-  
-  .input{
-    display: grid; gap: .35rem;
-    font-size: .95rem;
-  }
-  .input > span{ color: #5e6a53; }
-  .input > input{
-    border: 1px solid #d7decc; background:#fff; color: var(--ink);
-    border-radius: var(--radius);
-    padding: .6rem .7rem;
-    min-width: 14rem;
-  }
-  
-  /* ================= Buttons ================= */
-  .btn{
-    --bg: var(--green-700);
-    --bg-h: var(--green-600);
-    --fg: #fff;
-  
-    appearance: none;
-    border: 1px solid transparent;
-    background: var(--bg);
-    color: var(--fg);
-    border-radius: var(--radius);
-    padding: .62rem 1.0rem;
-    font: 600 .98rem/1 "Inter", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
-          Arial, "Noto Sans", "Liberation Sans", sans-serif;
-    box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 1px 3px rgba(0,0,0,.06) inset;
-    cursor: pointer;
-    transition: background .15s ease, box-shadow .15s ease, transform .02s ease;
-  }
-  .btn:hover{ background: var(--bg-h); }
-  .btn:active{ transform: translateY(1px); }
-  .btn:focus-visible{ outline: none; box-shadow: 0 0 0 3px var(--ring); }
-  
-  .btn--secondary{
-    --bg: #fff; --bg-h: #fff; --fg: var(--green-800);
-    color: var(--fg);
-    border: 1px solid var(--green-700);
-    box-shadow: none;
-  }
-  .btn--secondary:hover{ background: var(--green-200); }
-  
-  /* Ensure native <button> / <input type=submit> look like .btn when class applied */
-  button.btn, input[type="submit"].btn { all: unset; }
-  button.btn, input[type="submit"].btn {
-    display:inline-block; padding:.62rem 1.0rem; border-radius: var(--radius);
-    background: var(--green-700); color:#fff; border:1px solid transparent;
-    font: 600 .98rem/1 "Inter", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
-          Arial, "Noto Sans", "Liberation Sans", sans-serif;
-    cursor: pointer; transition: background .15s ease, box-shadow .15s ease, transform .02s ease;
-  }
-  button.btn:hover, input[type="submit"].btn:hover { background: var(--green-600); }
-  
-  /* ================= Checkboxes / Radios ================= */
-  /* Modern browsers */
-  input[type="checkbox"], input[type="radio"]{
-    accent-color: var(--green-700);
-  }
-  label.check{
-    display:inline-flex; align-items:center; gap:.5rem;
-    font-size: .98rem;
-  }
-  
-  /* Fallback for older browsers without accent-color */
-  @supports not (accent-color: red){
-    input[type="checkbox"], input[type="radio"]{
-      appearance: none;
-      width: 1.05rem; height: 1.05rem;
-      border: 2px solid var(--green-700);
-      border-radius: .25rem;
-      background: #fff; position: relative;
-      cursor: pointer;
-    }
-    input[type="radio"]{ border-radius: 50%; }
-    input[type="checkbox"]:checked::after{
-      content:""; position:absolute; inset: .15rem;
-      background:
-        linear-gradient(45deg, transparent 45%, var(--green-700) 45% 55%, transparent 55%),
-        linear-gradient(-45deg, transparent 55%, var(--green-700) 55% 65%, transparent 65%);
-    }
-    input[type="radio"]:checked::after{
-      content:""; position:absolute; inset: .25rem; border-radius:50%;
-      background: var(--green-700);
-    }
-  }
-  
-  /* ================= Misc ================= */
-  .loading{ margin-top: 8px; color:#6b765f; font-size:.95rem; }
-  
+}
+
+/* ---------- Optional polish for hero card ---------- */
+.hero-card{
+  background:#fff; border:1px solid #e9eedf; border-radius:16px;
+  padding:22px; box-shadow: 0 6px 20px rgba(0,0,0,.06);
+}
+.hero-sub{ color:#5e6a53; }
+.hero-actions{ display:flex; gap:.75rem; flex-wrap:wrap; }
+.hero-stats{ display:flex; gap:1.2rem; margin:.6rem 0 1rem; }
+.hero-stats .metric .value{ font-weight:700; color:var(--green-900); }

@@ -1,74 +1,47 @@
-<!doctype html>
-<html lang="nb">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Superdiplomatarium – Søk</title>
+---
+layout: default
+title: SuperDiplomatarium
+letters_count: 19114
+period_start: c1000
+period_end: c1570
+---
 
-  <!-- Fonts: Junicode (Carolingian feel) + EB Garamond fallback -->
-  <link href="https://fonts.googleapis.com/css2?family=Junicode:wght@400;600;700&family=EB+Garamond:wght@400;600&display=swap" rel="stylesheet">
+<section class="hero">
+  <div class="hero-card">
+    <h1 class="hero-title">SuperDiplomatarium</h1>
+    <p class="hero-sub">Digital utforskning av norske middelalderbrev</p>
 
-  <!-- App styles -->
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body>
-  <header class="site-header">
-    <div class="container">
-      <h1 class="site-brand" aria-label="Superdiplomatarium">
-        <span class="initial">S</span>uperdiplomatarium
-      </h1>
+    <div class="hero-stats">
+      <div class="metric">
+        <span class="value">{{ page.letters_count }}</span>
+        <small class="label">brev i samlingen</small>
+      </div>
+      <div class="metric">
+        <span class="value">{{ page.period_start }}–{{ page.period_end }}</span>
+        <small class="label">tidsperiode</small>
+      </div>
     </div>
-  </header>
 
-  <main class="site-main">
-    <div class="container">
-      <section class="search-card" aria-labelledby="heading-search">
-        <h2 id="heading-search">Søk i brevsamlingen</h2>
-
-        <form class="search-form" role="search" aria-label="Søk i brevsamlingen">
-          <div class="search-bar">
-            <input
-              type="search"
-              name="q"
-              placeholder="Søk i 19.000 brev…"
-              aria-label="Søk i brevsamlingen"
-            />
-            <button type="submit" class="btn">Søk</button>
-          </div>
-
-          <fieldset class="filters">
-            <legend class="sr-only">Filtre</legend>
-
-            <div class="checks">
-              <label class="check"><input type="checkbox" name="sammendrag" checked /> Sammendrag</label>
-              <label class="check"><input type="checkbox" name="brevtekst"   checked /> Brevtekst</label>
-              <label class="check"><input type="checkbox" name="sted" /> Sted</label>
-              <label class="check"><input type="checkbox" name="kilde" /> Kilde</label>
-            </div>
-
-            <div class="date-range">
-              <label class="input">
-                <span>Fra</span>
-                <input type="text" name="from" inputmode="numeric" placeholder="YYYY / YYYY-MM / YYYY-MM-D" />
-              </label>
-
-              <label class="input">
-                <span>Til</span>
-                <input type="text" name="to" inputmode="numeric" placeholder="YYYY / YYYY-MM / YYYY-MM-D" />
-              </label>
-
-              <label class="check exact">
-                <input type="checkbox" name="exact" /> Eksakt dato
-              </label>
-
-              <button type="reset" class="btn btn--secondary">Nullstill</button>
-            </div>
-          </fieldset>
-
-          <p class="loading">Lastet 7 av 20 deler…</p>
-        </form>
-      </section>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="{{ '/sok/' | relative_url }}">Søk i brevene</a>
+      <a class="btn btn-ghost"   href="{{ '/kart/' | relative_url }}">Utforsk på kart</a>
     </div>
-  </main>
-</body>
-</html>
+  </div>
+</section>
+
+<section class="selling-points">
+  <div class="points-grid">
+    <article class="point card">
+      <h3>Smidig søk</h3>
+      <p>Frasesøk, feltavgrensning og nøyaktige dato-intervaller. Eksporter treff som TXT eller CSV.</p>
+    </article>
+    <article class="point card">
+      <h3>Kart og geografi</h3>
+      <p>Filtrer på sted og normaliserte stedsnavn. Tegn områder og les brevene direkte i kartet.</p>
+    </article>
+    <article class="point card">
+      <h3>Akademisk integritet</h3>
+      <p>Bevarer kildehenvisninger, tillegg og fotnoter – klare til bruk i forskning og undervisning.</p>
+    </article>
+  </div>
+</section>
