@@ -1,145 +1,214 @@
-/* SuperDiplomatarium – UI overrides:
-   - Carolingian-ish display face for headings (Junicode)
-   - Buttons consistent with site greens
-   - Dark-green checkboxes/radios (no blue)
-   - Gentle defaults only; minimal risk to the rest of your CSS
-*/
+/* ====================================================================
+   SuperDiplomatarium theme fixes
+   - Carolingian-style brand (Junicode)
+   - Navbar layout
+   - Green buttons (primary/ghost)
+   - Dark-green checkboxes (no blue)
+   - Search page polish (moved inline CSS here)
+   ==================================================================== */
 
-/* Load fonts without touching <head> */
-@import url("https://fonts.googleapis.com/css2?family=Junicode:wght@400;600;700&family=EB+Garamond:wght@400;600&display=swap");
-
-/* ---------- Theme tokens ---------- */
+/* ---------- Tokens ---------- */
 :root{
-  --bg-cream: #FFF8E6;
-  --ink: #233014;
-
-  --green-950: #183a18;
-  --green-900: #1f4b1e;
-  --green-800: #2e5c2b;
-  --green-700: #3a6b34;   /* primary */
-  --green-600: #4f7d45;   /* hover */
-  --green-300: #b9d0b6;
-  --green-200: #dfeadf;
-
-  --radius: 12px;
-  --ring: rgba(58,107,52,.35);
-}
-
-/* ---------- Page base (very light touch) ---------- */
-html, body { background: var(--bg-cream); color: var(--ink); }
-
-/* ---------- Headings: Carolingian vibe ---------- */
-.hero-title,
-.site-brand,
-h1.site-title {
-  font-family: "Junicode", "EB Garamond", Georgia, serif;
-  font-weight: 600;
-  letter-spacing: .2px;
-  line-height: 1.05;
-  color: var(--green-900);
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  font-variant-ligatures: common-ligatures;
-  font-feature-settings: "liga" 1, "hlig" 1, "ss01" 1;
-}
-/* give the initial a touch more gravitas without weird dropcaps */
-.hero-title::first-letter { font-weight: 700; letter-spacing: .1px; }
-
-/* ---------- Buttons (match site greens) ---------- */
-.btn{
-  --bg: var(--green-700);
-  --bg-h: var(--green-600);
-  --fg: #fff;
-
-  display:inline-flex; align-items:center; justify-content:center;
-  gap:.45rem;
-  appearance: none;
-  border: 1px solid transparent;
-  background: var(--bg);
-  color: var(--fg);
-  border-radius: var(--radius);
-  padding: .62rem 1.0rem;
-  font: 600 .98rem/1 "Inter", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
-        Arial, "Noto Sans", "Liberation Sans", sans-serif;
-  box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 1px 3px rgba(0,0,0,.06) inset;
-  cursor: pointer;
-  transition: background .15s ease, box-shadow .15s ease, transform .02s ease;
-  text-decoration: none; /* for <a class="btn"> */
-}
-.btn:hover{ background: var(--bg-h); }
-.btn:active{ transform: translateY(1px); }
-.btn:focus-visible{ outline: none; box-shadow: 0 0 0 3px var(--ring); }
-
-/* Primary/ghost variants you already use */
-.btn-primary{
-  --bg: var(--green-700);
-  --bg-h: var(--green-600);
-  color: #fff; border-color: transparent;
-}
-.btn-ghost{
-  --bg: #fff; --bg-h: #fff;
-  color: var(--green-800);
-  border: 1px solid var(--green-700);
-  box-shadow: none;
-}
-.btn-ghost:hover{ background: var(--green-200); }
-
-/* If your buttons are <input type="submit">, keep the look */
-button.btn, input[type="submit"].btn { all: unset; }
-button.btn, input[type="submit"].btn {
-  display:inline-flex; align-items:center; justify-content:center;
-  padding:.62rem 1.0rem; border-radius: var(--radius);
-  background: var(--green-700); color:#fff; border:1px solid transparent;
-  font: 600 .98rem/1 "Inter", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
-        Arial, "Noto Sans", "Liberation Sans", sans-serif;
-  cursor: pointer; transition: background .15s ease, box-shadow .15s ease, transform .02s ease;
-}
-button.btn:hover, input[type="submit"].btn:hover { background: var(--green-600); }
-
-/* ---------- Inputs in the search UI (gentle) ---------- */
-input[type="search"],
-input[type="text"],
-input[type="date"]{
-  border: 1px solid #d7decc; background:#fff; color: var(--ink);
-  border-radius: var(--radius);
-  padding: .6rem .75rem;
-}
-input[type="search"]::placeholder{ color:#9aa48f; }
-
-/* ---------- Checkboxes / radios: dark green, not blue ---------- */
-input[type="checkbox"], input[type="radio"]{
-  accent-color: var(--green-800);
-}
-
-/* Fallback for very old browsers (scoped to filter area to stay safe) */
-.filters input[type="checkbox"], .filters input[type="radio"]{
-  /* modern browsers will ignore this block due to the @supports below */
-}
-@supports not (accent-color: red){
-  .filters label { display:inline-flex; align-items:center; gap:.5rem; }
-  .filters input[type="checkbox"], .filters input[type="radio"]{
-    appearance: none; width: 1.05rem; height: 1.05rem;
-    border: 2px solid var(--green-700); border-radius: .25rem;
-    background: #fff; position: relative; cursor: pointer;
+    --bg-cream: #FFF8E6;
+    --ink: #233014;
+  
+    --green-950: #183a18;
+    --green-900: #1f4b1e;
+    --green-800: #2e5c2b;
+    --green-700: #3a6b34;   /* Primary */
+    --green-600: #4f7d45;   /* Hover */
+    --green-300: #b9d0b6;
+    --green-200: #dfeadf;
+  
+    --radius: 12px;
+    --ring: rgba(58,107,52,.35);
+  
+    --container-max: 1100px;
   }
-  .filters input[type="radio"]{ border-radius: 50%; }
-  .filters input[type="checkbox"]:checked::after{
-    content:""; position:absolute; inset: .15rem;
-    background:
-      linear-gradient(45deg, transparent 45%, var(--green-700) 45% 55%, transparent 55%),
-      linear-gradient(-45deg, transparent 55%, var(--green-700) 55% 65%, transparent 65%);
+  
+  /* ---------- Base ---------- */
+  html, body { background: var(--bg-cream); color: var(--ink); }
+  body {
+    margin: 0;
+    font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
+          Arial, "Noto Sans", "Liberation Sans", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
-  .filters input[type="radio"]:checked::after{
-    content:""; position:absolute; inset: .25rem; border-radius:50%; background: var(--green-700);
+  .container { width: min(var(--container-max), 92vw); margin-inline: auto; }
+  
+  /* ---------- Header / Navbar ---------- */
+  .navbar { padding: 10px 0; }
+  .navbar .container { display: flex; align-items: center; gap: 1rem; }
+  .brand{
+    text-decoration: none;
+    color: var(--green-900);
+    display: inline-flex; align-items: baseline;
+    font-family: "Junicode", "EB Garamond", Georgia, serif;
+    font-weight: 600;
+    letter-spacing: .2px;
+    line-height: 1.05;
+    font-size: clamp(22px, 2.4vw, 28px);
+    font-variant-ligatures: common-ligatures;
+    font-feature-settings: "liga" 1, "hlig" 1;
   }
-}
-
-/* ---------- Optional polish for hero card ---------- */
-.hero-card{
-  background:#fff; border:1px solid #e9eedf; border-radius:16px;
-  padding:22px; box-shadow: 0 6px 20px rgba(0,0,0,.06);
-}
-.hero-sub{ color:#5e6a53; }
-.hero-actions{ display:flex; gap:.75rem; flex-wrap:wrap; }
-.hero-stats{ display:flex; gap:1.2rem; margin:.6rem 0 1rem; }
-.hero-stats .metric .value{ font-weight:700; color:var(--green-900); }
+  .brand-initial{ font-weight: 700; letter-spacing: .08px; margin-right: .02em; }
+  .nav-toggle{ display:none; } /* (no mobile menu yet; hide button) */
+  
+  .nav-links{
+    list-style: none; margin: 0 0 0 auto; padding: 0;
+    display: flex; gap: 1rem;
+  }
+  .nav-links a{
+    color: var(--green-900); text-decoration: none; font-weight: 600;
+    padding: .3rem .5rem; border-radius: 8px;
+  }
+  .nav-links a:hover, .nav-links a:focus-visible{
+    background: var(--green-200); outline: none;
+  }
+  
+  /* ---------- Page container ---------- */
+  .page-content { padding: 18px 0 48px; }
+  
+  /* ---------- Headings with Carolingian flavour ---------- */
+  .hero-title,
+  h1.site-title {
+    font-family: "Junicode", "EB Garamond", Georgia, serif;
+    font-weight: 600;
+    letter-spacing: .2px;
+    line-height: 1.05;
+    color: var(--green-900);
+  }
+  .hero-title::first-letter { font-weight: 700; letter-spacing: .1px; }
+  
+  /* ---------- Hero card polish ---------- */
+  .hero-card{
+    background:#fff; border:1px solid #e9eedf; border-radius:16px;
+    padding:22px; box-shadow: 0 6px 20px rgba(0,0,0,.06);
+  }
+  .hero-sub{ color:#5e6a53; }
+  .hero-actions{ display:flex; gap:.75rem; flex-wrap:wrap; }
+  .hero-stats{ display:flex; gap:1.2rem; margin:.6rem 0 1rem; }
+  .hero-stats .metric .value{ font-weight:700; color:var(--green-900); }
+  
+  /* ---------- Buttons ---------- */
+  .btn{
+    --bg: var(--green-700);
+    --bg-h: var(--green-600);
+    --fg: #fff;
+  
+    display:inline-flex; align-items:center; justify-content:center;
+    gap:.45rem;
+    appearance: none;
+    border: 1px solid transparent;
+    background: var(--bg);
+    color: var(--fg);
+    border-radius: var(--radius);
+    padding: .62rem 1.0rem;
+    font: 600 .98rem/1 "Inter", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
+          Arial, "Noto Sans", "Liberation Sans", sans-serif;
+    box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 1px 3px rgba(0,0,0,.06) inset;
+    cursor: pointer;
+    transition: background .15s ease, box-shadow .15s ease, transform .02s ease;
+    text-decoration: none;
+  }
+  .btn:hover{ background: var(--bg-h); }
+  .btn:active{ transform: translateY(1px); }
+  .btn:focus-visible{ outline: none; box-shadow: 0 0 0 3px var(--ring); }
+  
+  .btn-primary{ --bg: var(--green-700); --bg-h: var(--green-600); color: #fff; }
+  .btn-ghost{
+    --bg: #fff; --bg-h: #fff; color: var(--green-800);
+    border: 1px solid var(--green-700); box-shadow: none;
+  }
+  .btn-ghost:hover{ background: var(--green-200); }
+  
+  /* Make plain <button> with .btn class look right */
+  button.btn, input[type="submit"].btn { all: unset; }
+  button.btn, input[type="submit"].btn {
+    display:inline-flex; align-items:center; justify-content:center;
+    padding:.62rem 1.0rem; border-radius: var(--radius);
+    background: var(--green-700); color:#fff; border:1px solid transparent;
+    font: 600 .98rem/1 "Inter", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
+          Arial, "Noto Sans", "Liberation Sans", sans-serif;
+    cursor: pointer; transition: background .15s ease, box-shadow .15s ease, transform .02s ease;
+  }
+  button.btn:hover, input[type="submit"].btn:hover { background: var(--green-600); }
+  
+  /* ---------- Inputs (gentle) ---------- */
+  input[type="search"],
+  input[type="text"],
+  input[type="date"]{
+    border: 1px solid #d7decc; background:#fff; color: var(--ink);
+    border-radius: 14px;
+    padding: .65rem .8rem;
+  }
+  input::placeholder{ color:#9aa48f; }
+  
+  /* ---------- Checkboxes / radios ---------- */
+  input[type="checkbox"], input[type="radio"]{ accent-color: var(--green-800); }
+  
+  /* Fallback for very old browsers */
+  @supports not (accent-color: red){
+    label { display:inline-flex; align-items:center; gap:.5rem; }
+    input[type="checkbox"], input[type="radio"]{
+      appearance: none; width: 1.05rem; height: 1.05rem;
+      border: 2px solid var(--green-700); border-radius: .25rem;
+      background: #fff; position: relative; cursor: pointer;
+    }
+    input[type="radio"]{ border-radius: 50%; }
+    input[type="checkbox"]:checked::after{
+      content:""; position:absolute; inset: .15rem;
+      background:
+        linear-gradient(45deg, transparent 45%, var(--green-700) 45% 55%, transparent 55%),
+        linear-gradient(-45deg, transparent 55%, var(--green-700) 55% 65%, transparent 65%);
+    }
+    input[type="radio"]:checked::after{
+      content:""; position:absolute; inset: .25rem; border-radius:50%; background: var(--green-700);
+    }
+  }
+  
+  /* ---------- Search page (moved from inline <style>) ---------- */
+  .search-container { max-width: var(--container-max); margin: 0 auto; }
+  .search-box { display:flex; gap:.5rem; margin-bottom:.5rem; }
+  .search-box input { flex:1; }
+  .search-box .btn { border-radius: 14px; }
+  
+  .search-filters { margin-bottom:.25rem; display:flex; gap:1rem; flex-wrap:wrap; }
+  
+  .date-row {
+    display:flex; align-items:end; gap:.75rem; flex-wrap:wrap;
+    padding:.5rem 0 .25rem 0; border-bottom:1px solid #eee; margin-bottom:.5rem;
+  }
+  .date-input { display:flex; flex-direction:column; min-width:220px; }
+  .date-input input { padding:.5rem .6rem; border:1px solid #ddd; border-radius:8px; }
+  .chk-inline { display:flex; align-items:center; gap:.4rem; margin-left:.25rem; }
+  
+  #date-reset.btn-ghost { padding:.45rem .7rem; border-radius:8px; }
+  
+  .export-bar {
+    display:flex; align-items:center; justify-content:space-between;
+    gap:.5rem; padding:.5rem .25rem; margin:.25rem 0 .25rem 0; border-bottom:1px solid #eee;
+  }
+  .export-bar .btn { padding:.4rem .7rem; border-radius:8px; }
+  .export-bar .btn[disabled]{ opacity:.5; cursor:not-allowed; }
+  
+  .result-list { max-height:72vh; overflow:auto; padding-right:.5rem; }
+  .search-result { background:#fff; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); padding:14px 16px; margin:12px 0; }
+  .idline { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .dn-code { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight:600; }
+  .dn-archaic { color:#555; font-style:italic; font-size:.95rem; }
+  .toggle-details { background:none; border:none; color:#0a62d0; padding:0; font:inherit; cursor:pointer; }
+  .toggle-details:hover { text-decoration:underline; }
+  .details { border-top:1px solid #eee; margin-top:.5rem; padding-top:.6rem; }
+  .section-label { display:block; font-weight:600; color:#333; margin-top:.5rem; }
+  .sammendrag,.brevtekst,.fotnoter,.tillegg { white-space:pre-wrap; font-family:Georgia,"Times New Roman",serif; font-size:1rem; line-height:1.6; margin-top:.35rem; }
+  
+  .pagination { display:flex; flex-wrap:wrap; gap:.35rem; align-items:center; justify-content:center; margin:.5rem 0 1.25rem 0; }
+  .page-btn,.page-num { border:1px solid #ddd; background:#fafafa; padding:.35rem .6rem; border-radius:8px; cursor:pointer; user-select:none; }
+  .page-btn[disabled]{ opacity:.55; cursor:not-allowed; }
+  .page-num.active { background:#0a62d0; color:#fff; border-color:#0a62d0; }
+  
+  /* ---------- Footer ---------- */
+  .site-footer { padding: 14px 0 24px; }
+  
