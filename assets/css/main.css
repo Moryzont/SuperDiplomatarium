@@ -218,8 +218,8 @@
 .fig-landing { padding: clamp(18px, 4vw, 32px) 0 clamp(28px, 6vw, 56px); }
 
 .fig-card{
-  background: #fff;                     /* lys kortflate mot krem-bakgrunn */
-  border: 1.5px solid #9FAF8E;          /* oliventonet kant (kan justeres) */
+  background: #FFF8E6;                     /* lys kortflate mot krem-bakgrunn */
+  border: 2px solid #9FAF8E;          /* oliventonet kant (kan justeres) */
   border-radius: 26px;                   /* store, myke hjørner */
   padding: clamp(18px, 4vw, 32px) clamp(18px, 5vw, 60px);
   box-shadow: 0 10px 22px rgba(0,0,0,.07); /* jevn skygge – alle kanter */
