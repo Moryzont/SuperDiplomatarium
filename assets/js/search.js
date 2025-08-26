@@ -1,11 +1,13 @@
 /* global MiniSearch, document, window, fetch */
 
 /**
- * SuperDiplomatarium – Søk
- * - Date-only searches now work (no text needed).
- * - Fra/Til accept YYYY, YYYY-MM, YYYY-MM-DD.
- * - “Eksakt dato” uses Fra as a precise day/month/year (Til disabled).
- * - Pagination + export preserved.
+ * SuperDiplomatarium – Søk (expanded dataset)
+ * - Sammendrag search also covers "regest"
+ * - Sted search covers DN_sted, RN_sted, Normalized_name
+ * - Kilde search covers DN_source, RN_source
+ * - Date-only searches work (no text needed)
+ * - Fra/Til accept YYYY, YYYY-MM, YYYY-MM-DD (Eksakt = one day)
+ * - Pagination + export
  */
 
 // =============== Globals ===============
@@ -43,12 +45,17 @@ async function initializeSearch() {
     const metadata = await metaResponse.json();
     totalChunks = metadata.chunks;
 
+    // Index: note that we feed combined fields for sammendrag, sted_all, kilde
     searchIndex = new MiniSearch({
       idField: 'id',
       fields: ['sammendrag', 'brevtekst', 'sted_all', 'kilde'],
       storeFields: [
-        'DN_ref','SDN_ID','sammendrag','brevtekst','original_dato','original_sted',
-        'normalized_name','date_start','date_end','sted_all','fotnoter','tillegg','kilde'
+        'DN_ref','RN_ref','SDN_ID',
+        'sammendrag','brevtekst',
+        'date_start','date_end',
+        'date_text',               // DN_dato/RN_dato textual
+        'sted_dn','sted_rn','normalized_name','sted_all',
+        'fotnoter','tillegg','kilde'
       ],
       searchOptions: { boost:{ sted_all:4,sammendrag:3,brevtekst:2 }, fuzzy:0.2, prefix:true }
     });
@@ -84,35 +91,57 @@ async function loadRemainingChunks() {
 }
 
 function normalizeLetter(raw, chunkIndex, rowIndex) {
+  // IDs
   const sdn = raw.SDN_ID || raw.SDNID || raw['\ufeffSDNID'] || raw['﻿SDNID'] || null;
   const dn  = raw.DN_ref || raw.DN_REF || raw.DNREF || null;
+  const rn  = raw.RN_ref || raw.RN_REF || null;
 
-  const original_dato = raw.original_dato || raw.dato || null;
-  const original_sted = raw.original_sted || raw.sted || null;
-  const normalized_name = raw.Normalized_name || raw.normalized_name || null;
+  // Text fields
+  const regest = raw.regest || '';
+  const sammendragCombined = [raw.sammendrag, regest].filter(Boolean).join(' | ');
+  const brevtekst = raw.brevtekst || '';
 
-  const fotnoter = raw.fotnoter || raw.Fotnoter || '';
-  const tillegg  = raw.tillegg  || raw.Tillegg  || '';
-  const kilde    = raw.kilde    || raw.Kilde    || '';
+  // Sources (kilde)
+  const kildeCombined = [raw.DN_source, raw.RN_source].filter(Boolean).join(' | ');
 
-  const id = `${(dn || sdn || 'doc')}#${chunkIndex}:${rowIndex}`;
-  const sted_all = [original_sted, normalized_name].filter(Boolean).join(' | ');
+  // Dates (machine + human-readable)
+  const date_start = raw.date_start || null;
+  const date_end   = raw.date_end || null;
+  const date_text  = raw.DN_dato || raw.RN_dato || ''; // display text if present
+  const ORD_START  = dateStrToOrd(date_start, false);
+  const ORD_END    = dateStrToOrd(date_end, true) ?? ORD_START;
 
-  const ORD_START = dateStrToOrd(raw.date_start, false);
-  const ORD_END   = dateStrToOrd(raw.date_end, true) ?? ORD_START;
+  // Places
+  const sted_dn = raw.DN_sted || '';
+  const sted_rn = raw.RN_sted || '';
+  const normalized_name = raw.Normalized_name || raw.normalized_name || '';
+  const sted_all = [sted_dn, sted_rn, normalized_name].filter(Boolean).join(' | ');
+
+  // Notes / extras
+  const fotnoterCombined = [raw.fotnoter_DN, raw.fotnoter_N].filter(Boolean).join('\n');
+  const tillegg = raw.Tillegg || raw.tillegg || '';
+
+  const id = `${(dn || sdn || rn || 'doc')}#${chunkIndex}:${rowIndex}`;
 
   return {
     id,
     DN_ref: dn || undefined,
+    RN_ref: rn || undefined,
     SDN_ID: sdn || undefined,
-    sammendrag: raw.sammendrag || '',
-    brevtekst: raw.brevtekst || '',
-    original_dato, original_sted, normalized_name, sted_all,
-    kilde, fotnoter, tillegg,
-    date_start: raw.date_start || null,
-    date_end: raw.date_end || null,
+
+    sammendrag: sammendragCombined,
+    brevtekst,
+
+    date_start, date_end, date_text,
     ORD_START: ORD_START ?? null,
     ORD_END: ORD_END ?? ORD_START ?? null,
+
+    sted_dn, sted_rn, normalized_name, sted_all,
+
+    kilde: kildeCombined,
+    fotnoter: fotnoterCombined,
+    tillegg,
+
     _raw: raw
   };
 }
@@ -216,7 +245,7 @@ function performSearch() {
   let unionMap = new Map(); // id -> score
 
   if (!qUsable && hasDateFilter) {
-    // Date-only search: start from ALL docs, then apply date filter
+    // Date-only search
     const dummyGroup = { must: [], not: [], filters: { fromOrd: uiFrom, toOrd: uiTo } };
     unionMap = runAndGroup(dummyGroup, selectedFields, uiFrom, uiTo);
   } else if (qUsable) {
@@ -227,7 +256,6 @@ function performSearch() {
       for (const [id, score] of set) unionMap.set(id, Math.max(unionMap.get(id) || 0, score));
     }
   } else {
-    // Nothing to search
     currentResultsAll = [];
     currentPage = 1;
     updateResults([]);
@@ -333,24 +361,27 @@ function updateResults(results, from=0, to=0, total=0){
     <p class="result-count">Viser ${from}–${to} av ${total} treff</p>
     <div class="result-list">
       ${results.map(r=>{
-        const humanDate = formatDateRange(r.date_start, r.date_end, r.original_dato);
+        const humanDate = r.date_text?.trim() ? r.date_text : formatDateRange(r.date_start, r.date_end);
         const archaic = dnToArchaic(r.DN_ref);
+        const stedBest = r.normalized_name || r.sted_dn || r.sted_rn || 'Ukjent sted';
         return `
         <div class="search-result" data-id="${r.id}">
           <div class="idline">
-            <span class="dn-code">${escapeHtml(r.DN_ref || 'Uten referanse')}</span>
+            <span class="dn-code">${escapeHtml(r.DN_ref || r.RN_ref || 'Uten referanse')}</span>
             <span class="dn-archaic">${escapeHtml(archaic)}</span>
           </div>
           <h3><button class="toggle-details" aria-expanded="false">Vis fulltekst</button></h3>
-          <p class="meta">${escapeHtml(humanDate)} – ${escapeHtml(r.normalized_name || r.original_sted || 'Ukjent sted')}</p>
+          <p class="meta">${escapeHtml(humanDate)} – ${escapeHtml(stedBest)}</p>
           <div class="details" style="display:none;">
             <p><strong>date_start:</strong> ${escapeHtml(r.date_start || '')}
                &nbsp;&nbsp;<strong>date_end:</strong> ${escapeHtml(r.date_end || '')}
-               &nbsp;&nbsp;<strong>Sted:</strong> ${escapeHtml(r.original_sted || 'Ukjent')}
+               &nbsp;&nbsp;<strong>DN_sted:</strong> ${escapeHtml(r.sted_dn || '—')}
+               &nbsp;&nbsp;<strong>RN_sted:</strong> ${escapeHtml(r.sted_rn || '—')}
                &nbsp;&nbsp;<strong>Normalisert:</strong> ${escapeHtml(r.normalized_name || '—')}
             </p>
-            ${section('Sammendrag', r.sammendrag, 'sammendrag')}
+            ${section('Sammendrag / Regest', r.sammendrag, 'sammendrag')}
             ${section('Brevtekst',   r.brevtekst,  'brevtekst')}
+            ${section('Kilde (DN/RN)', r.kilde,    'kilde')}
             ${section('Fotnoter',    r.fotnoter,   'fotnoter')}
             ${section('Tillegg',     r.tillegg,    'tillegg')}
           </div>
@@ -450,12 +481,17 @@ function setExportEnabled(on){ const bar=document.getElementById('export-bar'); 
 
 function toTXT_likeDetails(rows){
   const parts=[]; for(const r of rows){
-    const headL=r.DN_ref||'Uten referanse'; const headR=dnToArchaic(r.DN_ref)||'';
-    const dateLine=formatDateRange(r.date_start,r.date_end,r.original_dato);
-    const placeOrig=r.original_sted||'Ukjent'; const placeNorm=r.normalized_name||'—';
-    const bits=[ `${headL}    ${headR}`, `${dateLine} — Sted: ${placeOrig} | Normalisert: ${placeNorm}`, `date_start: ${r.date_start||''}    date_end: ${r.date_end||''}` ];
-    if(r.sammendrag?.trim()) bits.push('','SAMMENDRAG:', r.sammendrag);
+    const headL=r.DN_ref||r.RN_ref||'Uten referanse'; const headR=dnToArchaic(r.DN_ref)||'';
+    const dateLine = r.date_text?.trim() ? r.date_text : formatDateRange(r.date_start,r.date_end);
+    const placeBits = [
+      r.sted_dn ? `DN_sted: ${r.sted_dn}` : null,
+      r.sted_rn ? `RN_sted: ${r.sted_rn}` : null,
+      r.normalized_name ? `Normalisert: ${r.normalized_name}` : null
+    ].filter(Boolean).join(' | ');
+    const bits=[ `${headL}    ${headR}`, `${dateLine}${placeBits ? ' — ' + placeBits : ''}`, `date_start: ${r.date_start||''}    date_end: ${r.date_end||''}` ];
+    if(r.sammendrag?.trim()) bits.push('','SAMMENDRAG/REGEST:', r.sammendrag);
     if(r.brevtekst ?.trim()) bits.push('','BREVTEKST:',  r.brevtekst );
+    if(r.kilde    ?.trim()) bits.push('','KILDE (DN/RN):', r.kilde );
     if(r.fotnoter  ?.trim()) bits.push('','FOTNOTER:',   r.fotnoter  );
     if(r.tillegg   ?.trim()) bits.push('','TILLEGG:',    r.tillegg   );
     parts.push(bits.join('\n'));
@@ -464,7 +500,7 @@ function toTXT_likeDetails(rows){
 
 function toCSV_fromRaw(rows){
   const keySet=new Set(); for(const r of rows){ const raw=r._raw||{}; for(const k of Object.keys(raw)) keySet.add(k); }
-  const preferred=['\ufeffSDNID','SDNID','SDN_ID','DN_REF','DN_ref','DNREF','sammendrag','kilde','nummer','dato','sted','brevtekst','fotnoter','tillegg','sidetall_bind','date_start','date_end','Normalized_name','normalized_name','lat','lon','LAT','LON','Region','Problem'];
+  const preferred=['\ufeffSDNID','SDNID','SDN_ID','DN_REF','DN_ref','RN_REF','RN_ref','sammendrag','regest','DN_source','RN_source','DN_dato','RN_dato','DN_sted','RN_sted','Normalized_name','brevtekst','fotnoter_DN','fotnoter_N','Tillegg','date_start','date_end','lat','lon','uncertain_loc'];
   const presentPreferred=preferred.filter(k=>keySet.has(k));
   const remaining=Array.from(keySet).filter(k=>!presentPreferred.includes(k)).sort();
   const headers=[...presentPreferred,...remaining];
@@ -475,8 +511,7 @@ function toCSV_fromRaw(rows){
 }
 
 // =============== Utilities ===============
-function formatDateRange(start,end,original){
-  if(original && String(original).trim()) return String(original);
+function formatDateRange(start,end){
   const ys=parseYear(start); const ye=(parseYear(end) ?? ys);
   if(ys && ye) return ys===ye?String(ys):`${ys}–${ye}`; if(ys) return String(ys); if(ye) return String(ye); return 'Ukjent';
 }
