@@ -1,13 +1,13 @@
 /* global MiniSearch, document, window, fetch */
 
 /**
- * SuperDiplomatarium – Søk (expanded dataset)
- * - Sammendrag search also covers "regest"
+ * SuperDiplomatarium – Søk (dataset v2)
+ * - Sammendrag search also searches in "regest" (kept separate for display)
  * - Sted search covers DN_sted, RN_sted, Normalized_name
- * - Kilde search covers DN_source, RN_source
- * - Date-only searches work (no text needed)
- * - Fra/Til accept YYYY, YYYY-MM, YYYY-MM-DD (Eksakt = one day)
- * - Pagination + export
+ * - Kilde search covers DN_source and RN_source
+ * - Result cards show a regest preview
+ * - Full view shows RN/DN dates and places, and lists Regest above Sammendrag
+ * - Date-only searches work; pagination + export kept
  */
 
 // =============== Globals ===============
@@ -45,17 +45,21 @@ async function initializeSearch() {
     const metadata = await metaResponse.json();
     totalChunks = metadata.chunks;
 
-    // Index: note that we feed combined fields for sammendrag, sted_all, kilde
+    // We index combined fields but store the granular ones for display.
     searchIndex = new MiniSearch({
       idField: 'id',
       fields: ['sammendrag', 'brevtekst', 'sted_all', 'kilde'],
       storeFields: [
+        // identities
         'DN_ref','RN_ref','SDN_ID',
-        'sammendrag','brevtekst',
-        'date_start','date_end',
-        'date_text',               // DN_dato/RN_dato textual
+        // text (granular + combined for search)
+        'regest','sammendrag_raw','brevtekst',
+        // dates (machine + textual RN/DN)
+        'date_start','date_end','date_rn_text','date_dn_text',
+        // places
         'sted_dn','sted_rn','normalized_name','sted_all',
-        'fotnoter','tillegg','kilde'
+        // sources / notes
+        'kilde','fotnoter','tillegg'
       ],
       searchOptions: { boost:{ sted_all:4,sammendrag:3,brevtekst:2 }, fuzzy:0.2, prefix:true }
     });
@@ -93,23 +97,25 @@ async function loadRemainingChunks() {
 function normalizeLetter(raw, chunkIndex, rowIndex) {
   // IDs
   const sdn = raw.SDN_ID || raw.SDNID || raw['\ufeffSDNID'] || raw['﻿SDNID'] || null;
-  const dn  = raw.DN_ref || raw.DN_REF || raw.DNREF || null;
-  const rn  = raw.RN_ref || raw.RN_REF || null;
+  const dn  = raw.DN_REF || raw.DN_ref || raw.DNREF || null;
+  const rn  = raw.RN_REF || raw.RN_ref || null;
 
-  // Text fields
-  const regest = raw.regest || '';
-  const sammendragCombined = [raw.sammendrag, regest].filter(Boolean).join(' | ');
-  const brevtekst = raw.brevtekst || '';
+  // Regest + sammendrag: keep separate for display, combine for search.
+  const regest           = raw.regest || '';
+  const sammendrag_raw   = raw.sammendrag || '';
+  const sammendrag_index = [sammendrag_raw, regest].filter(Boolean).join(' | ');
+  const brevtekst        = raw.brevtekst || '';
 
-  // Sources (kilde)
+  // Sources (kilde): combine DN/RN for searching/display.
   const kildeCombined = [raw.DN_source, raw.RN_source].filter(Boolean).join(' | ');
 
-  // Dates (machine + human-readable)
-  const date_start = raw.date_start || null;
-  const date_end   = raw.date_end || null;
-  const date_text  = raw.DN_dato || raw.RN_dato || ''; // display text if present
-  const ORD_START  = dateStrToOrd(date_start, false);
-  const ORD_END    = dateStrToOrd(date_end, true) ?? ORD_START;
+  // Dates (machine + textual)
+  const date_start  = raw.date_start || null;
+  const date_end    = raw.date_end   || null;
+  const date_rn_txt = raw.RN_dato    || '';
+  const date_dn_txt = raw.DN_dato    || '';
+  const ORD_START   = dateStrToOrd(date_start, false);
+  const ORD_END     = dateStrToOrd(date_end, true) ?? ORD_START;
 
   // Places
   const sted_dn = raw.DN_sted || '';
@@ -129,10 +135,15 @@ function normalizeLetter(raw, chunkIndex, rowIndex) {
     RN_ref: rn || undefined,
     SDN_ID: sdn || undefined,
 
-    sammendrag: sammendragCombined,
+    // Index field (combined) + granular for display
+    sammendrag: sammendrag_index,
+    sammendrag_raw,
+    regest,
     brevtekst,
 
-    date_start, date_end, date_text,
+    date_start, date_end,
+    date_rn_text: date_rn_txt,
+    date_dn_text: date_dn_txt,
     ORD_START: ORD_START ?? null,
     ORD_END: ORD_END ?? ORD_START ?? null,
 
@@ -361,9 +372,10 @@ function updateResults(results, from=0, to=0, total=0){
     <p class="result-count">Viser ${from}–${to} av ${total} treff</p>
     <div class="result-list">
       ${results.map(r=>{
-        const humanDate = r.date_text?.trim() ? r.date_text : formatDateRange(r.date_start, r.date_end);
+        const bestDate = r.date_rn_text?.trim() || r.date_dn_text?.trim() || formatDateRange(r.date_start, r.date_end);
         const archaic = dnToArchaic(r.DN_ref);
         const stedBest = r.normalized_name || r.sted_dn || r.sted_rn || 'Ukjent sted';
+        const regestPreview = (r.regest && r.regest.trim()) ? snippet(r.regest, 220) : (r.sammendrag_raw ? snippet(r.sammendrag_raw, 220) : '');
         return `
         <div class="search-result" data-id="${r.id}">
           <div class="idline">
@@ -371,19 +383,28 @@ function updateResults(results, from=0, to=0, total=0){
             <span class="dn-archaic">${escapeHtml(archaic)}</span>
           </div>
           <h3><button class="toggle-details" aria-expanded="false">Vis fulltekst</button></h3>
-          <p class="meta">${escapeHtml(humanDate)} – ${escapeHtml(stedBest)}</p>
+          <p class="meta">${escapeHtml(bestDate)} – ${escapeHtml(stedBest)}</p>
+          ${regestPreview ? `<p class="summary"><em>${escapeHtml(regestPreview)}</em></p>` : ''}
           <div class="details" style="display:none;">
-            <p><strong>date_start:</strong> ${escapeHtml(r.date_start || '')}
-               &nbsp;&nbsp;<strong>date_end:</strong> ${escapeHtml(r.date_end || '')}
-               &nbsp;&nbsp;<strong>DN_sted:</strong> ${escapeHtml(r.sted_dn || '—')}
-               &nbsp;&nbsp;<strong>RN_sted:</strong> ${escapeHtml(r.sted_rn || '—')}
-               &nbsp;&nbsp;<strong>Normalisert:</strong> ${escapeHtml(r.normalized_name || '—')}
+            <p>
+              <strong>Regest dato:</strong> ${escapeHtml(r.date_rn_text || '—')}
+              &nbsp;&nbsp;<strong>Diplomatarium dato:</strong> ${escapeHtml(r.date_dn_text || '—')}
             </p>
-            ${section('Sammendrag / Regest', r.sammendrag, 'sammendrag')}
-            ${section('Brevtekst',   r.brevtekst,  'brevtekst')}
-            ${section('Kilde (DN/RN)', r.kilde,    'kilde')}
-            ${section('Fotnoter',    r.fotnoter,   'fotnoter')}
-            ${section('Tillegg',     r.tillegg,    'tillegg')}
+            <p>
+              <strong>RN_sted:</strong> ${escapeHtml(r.sted_rn || '—')}
+              &nbsp;&nbsp;<strong>DN_sted:</strong> ${escapeHtml(r.sted_dn || '—')}
+              &nbsp;&nbsp;<strong>Normalisert:</strong> ${escapeHtml(r.normalized_name || '—')}
+            </p>
+            <p>
+              <strong>date_start:</strong> ${escapeHtml(r.date_start || '')}
+              &nbsp;&nbsp;<strong>date_end:</strong> ${escapeHtml(r.date_end || '')}
+            </p>
+            ${section('Regest',       r.regest,         'regest')}
+            ${section('Sammendrag',   r.sammendrag_raw, 'sammendrag')}
+            ${section('Brevtekst',    r.brevtekst,      'brevtekst')}
+            ${section('Kilde (DN/RN)',r.kilde,          'kilde')}
+            ${section('Fotnoter',     r.fotnoter,       'fotnoter')}
+            ${section('Tillegg',      r.tillegg,        'tillegg')}
           </div>
         </div>`;
       }).join('')}
@@ -482,25 +503,40 @@ function setExportEnabled(on){ const bar=document.getElementById('export-bar'); 
 function toTXT_likeDetails(rows){
   const parts=[]; for(const r of rows){
     const headL=r.DN_ref||r.RN_ref||'Uten referanse'; const headR=dnToArchaic(r.DN_ref)||'';
-    const dateLine = r.date_text?.trim() ? r.date_text : formatDateRange(r.date_start,r.date_end);
+    const dateLine = (r.date_rn_text?.trim() || r.date_dn_text?.trim() || formatDateRange(r.date_start,r.date_end));
     const placeBits = [
-      r.sted_dn ? `DN_sted: ${r.sted_dn}` : null,
       r.sted_rn ? `RN_sted: ${r.sted_rn}` : null,
+      r.sted_dn ? `DN_sted: ${r.sted_dn}` : null,
       r.normalized_name ? `Normalisert: ${r.normalized_name}` : null
     ].filter(Boolean).join(' | ');
-    const bits=[ `${headL}    ${headR}`, `${dateLine}${placeBits ? ' — ' + placeBits : ''}`, `date_start: ${r.date_start||''}    date_end: ${r.date_end||''}` ];
-    if(r.sammendrag?.trim()) bits.push('','SAMMENDRAG/REGEST:', r.sammendrag);
-    if(r.brevtekst ?.trim()) bits.push('','BREVTEKST:',  r.brevtekst );
-    if(r.kilde    ?.trim()) bits.push('','KILDE (DN/RN):', r.kilde );
-    if(r.fotnoter  ?.trim()) bits.push('','FOTNOTER:',   r.fotnoter  );
-    if(r.tillegg   ?.trim()) bits.push('','TILLEGG:',    r.tillegg   );
+    const bits=[
+      `${headL}    ${headR}`,
+      `${dateLine}${placeBits ? ' — ' + placeBits : ''}`,
+      `Regest dato: ${r.date_rn_text||'—'}    Diplomatarium dato: ${r.date_dn_text||'—'}`,
+      `date_start: ${r.date_start||''}    date_end: ${r.date_end||''}`
+    ];
+    if(r.regest         ?.trim()) bits.push('','REGEST:',      r.regest);
+    if(r.sammendrag_raw ?.trim()) bits.push('','SAMMENDRAG:',  r.sammendrag_raw);
+    if(r.brevtekst      ?.trim()) bits.push('','BREVTEKST:',   r.brevtekst);
+    if(r.kilde          ?.trim()) bits.push('','KILDE (DN/RN):', r.kilde);
+    if(r.fotnoter       ?.trim()) bits.push('','FOTNOTER:',    r.fotnoter);
+    if(r.tillegg        ?.trim()) bits.push('','TILLEGG:',     r.tillegg);
     parts.push(bits.join('\n'));
   } return parts.join('\n\n---\n\n');
 }
 
 function toCSV_fromRaw(rows){
   const keySet=new Set(); for(const r of rows){ const raw=r._raw||{}; for(const k of Object.keys(raw)) keySet.add(k); }
-  const preferred=['\ufeffSDNID','SDNID','SDN_ID','DN_REF','DN_ref','RN_REF','RN_ref','sammendrag','regest','DN_source','RN_source','DN_dato','RN_dato','DN_sted','RN_sted','Normalized_name','brevtekst','fotnoter_DN','fotnoter_N','Tillegg','date_start','date_end','lat','lon','uncertain_loc'];
+  const preferred=[
+    '\ufeffSDNID','SDNID','SDN_ID',
+    'DN_REF','DN_ref','RN_REF','RN_ref',
+    'sammendrag','regest',
+    'DN_source','RN_source',
+    'DN_dato','RN_dato',
+    'DN_sted','RN_sted','Normalized_name',
+    'brevtekst','fotnoter_DN','fotnoter_N','Tillegg',
+    'date_start','date_end','lat','lon','uncertain_loc'
+  ];
   const presentPreferred=preferred.filter(k=>keySet.has(k));
   const remaining=Array.from(keySet).filter(k=>!presentPreferred.includes(k)).sort();
   const headers=[...presentPreferred,...remaining];
@@ -520,3 +556,4 @@ function escapeHtml(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,
 function dnToArchaic(dn){ if(!dn) return ''; const m=String(dn).match(/^DN(\d{3})(\d{5})$/i); if(!m) return ''; const vol=parseInt(m[1],10), num=parseInt(m[2],10); return `Diplomatarium Norvegicum ${toRoman(vol)}, ${num}`; }
 function toRoman(num){ if(!Number.isFinite(num)||num<=0) return ''; const map=[[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']]; let out=''; for(const [v,s] of map){ while(num>=v){ out+=s; num-=v; } } return out; }
 function downloadText(text,filename,opts={}){ const parts=[]; if(opts.addBOM) parts.push('\uFEFF'); parts.push(text); const blob=new Blob(parts,{type:'text/plain;charset=utf-8'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); },0); }
+function snippet(t, n){ const s=String(t||'').trim(); if(!s) return ''; return s.length<=n ? s : s.slice(0,n).replace(/\s+\S*$/,'') + '…'; }
