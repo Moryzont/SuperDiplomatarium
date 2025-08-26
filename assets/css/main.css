@@ -1,27 +1,22 @@
 /* ====================================================================
-   SuperDiplomatarium theme — strict 5-color palette
+   SuperDiplomatarium — theme (strict 5-color palette)
    Palette:
      --c-dark  = #283618
      --c-olive = #606C38
      --c-light = #FEFAE0
      --c-sand  = #DDA15E
      --c-clay  = #BC6C25
+   All UI colors must be one of the five above.
    ==================================================================== */
 
 /* ---------- Tokens ---------- */
 :root{
-    /* core palette */
     --c-dark:  #283618;
     --c-olive: #606C38;
     --c-light: #FEFAE0;
     --c-sand:  #DDA15E;
     --c-clay:  #BC6C25;
   
-    /* legacy aliases kept for compatibility with existing classes */
-    --bg-cream: var(--c-light);
-    --ink:      var(--c-dark);
-  
-    /* spacing / radius */
     --radius: 12px;
     --container-max: 1100px;
   }
@@ -36,32 +31,29 @@
     text-rendering: optimizeLegibility;
   }
   .container { width: min(var(--container-max), 92vw); margin-inline: auto; }
+  .page-content { padding: 18px 0 48px; }
   
-  /* links: dark → olive on hover */
+  /* Links: dark → olive on hover */
   a{ color: var(--c-dark); text-decoration: none; }
   a:hover{ color: var(--c-olive); }
   
-  /* ---------- Header / Navbar ---------- */
-  .navbar {
-    padding: 10px 0;
-    background: var(--c-dark);
-    color: var(--c-light);
-  }
+  /* ---------- Header / Navbar (light, typographic) ---------- */
+  .site-header{ background: transparent; color: var(--c-dark); }
+  .navbar { padding: 10px 0; }
   .navbar .container { display: flex; align-items: center; gap: 1rem; }
   
   .brand{
     text-decoration: none;
-    color: var(--c-light);
+    color: var(--c-dark);
     display: inline-flex; align-items: baseline;
     font-family: "Junicode", "EB Garamond", Georgia, serif;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: .2px;
     line-height: 1.05;
-    font-size: clamp(22px, 2.4vw, 28px);
-    font-variant-ligatures: common-ligatures;
-    font-feature-settings: "liga" 1, "hlig" 1;
+    font-size: clamp(28px, 2.8vw, 36px);
   }
-  .brand-initial{ font-weight: 700; letter-spacing: .08px; margin-right: .02em; color: var(--c-clay); }
+  .brand-initial{ font-weight: 700; letter-spacing: .08px; margin-right: .02em; color: var(--c-dark); }
+  
   .nav-toggle{ display:none; } /* (no mobile menu yet; hide button) */
   
   .nav-links{
@@ -69,15 +61,12 @@
     display: flex; gap: 1rem;
   }
   .nav-links a{
-    color: var(--c-light); text-decoration: none; font-weight: 600;
-    padding: .3rem .5rem; border-radius: 8px;
+    color: var(--c-dark); text-decoration: none; font-weight: 600;
+    padding: .2rem .35rem; border-radius: 6px;
   }
   .nav-links a:hover, .nav-links a:focus-visible{
-    color: var(--c-sand); background: transparent; outline: none;
+    color: var(--c-olive); background: transparent; outline: none;
   }
-  
-  /* ---------- Page container ---------- */
-  .page-content { padding: 18px 0 48px; }
   
   /* ---------- Headings with Carolingian flavour ---------- */
   .hero-title,
@@ -90,18 +79,39 @@
   }
   .hero-title::first-letter { font-weight: 700; letter-spacing: .1px; }
   
-  /* ---------- Hero card ---------- */
+  /* ---------- Hero (kept minimal; some pages still use it) ---------- */
   .hero-card{
     background: var(--c-light);
     border: 2px solid var(--c-olive);
-    border-radius:16px;
-    padding:22px;
-    /* no non-palette shadows */
+    border-radius: 16px;
+    padding: 22px;
   }
   .hero-sub{ color: var(--c-olive); }
   .hero-actions{ display:flex; gap:.75rem; flex-wrap:wrap; }
   .hero-stats{ display:flex; gap:1.2rem; margin:.6rem 0 1rem; }
   .hero-stats .metric .value{ font-weight:700; color: var(--c-clay); }
+  
+  /* ---------- Intro cards (front page) ---------- */
+  .intro-card{
+    background: var(--c-light);
+    border: 2px solid var(--c-olive);
+    border-radius: 28px;
+    padding: clamp(20px, 3.2vw, 32px);
+    max-width: 820px;
+    margin: 26px auto;
+    text-align: center;
+  }
+  .intro-card h2{
+    margin: 0 0 .6rem 0;
+    font-family:"Junicode","EB Garamond",Georgia,serif;
+    font-weight: 700; letter-spacing:.2px;
+    color: var(--c-dark);
+    font-size: clamp(22px, 2.2vw, 28px);
+  }
+  .intro-card p{
+    max-width: 60ch; margin: 0 auto 1.1rem; color: var(--c-dark);
+  }
+  .intro-actions{ display:flex; gap: 28px; justify-content:center; margin-top: .6rem; }
   
   /* ---------- Buttons ---------- */
   .btn{
@@ -118,7 +128,7 @@
     text-decoration: none;
   }
   
-  /* Primary: clay → sand (text stays light) */
+  /* Primary (generic): clay → sand */
   .btn-primary{
     background: var(--c-clay);
     color: var(--c-light);
@@ -130,7 +140,7 @@
     color: var(--c-light);
   }
   
-  /* Ghost: light surface, dark text; hover to sand */
+  /* Ghost (generic): light -> sand hover */
   .btn-ghost{
     background: var(--c-light);
     color: var(--c-dark);
@@ -142,7 +152,30 @@
     border-color: var(--c-sand);
   }
   
-  /* Make plain <button> with .btn class look right */
+  /* Elevated olive pills (front page) */
+  .btn-elevated{
+    background: var(--c-olive);
+    color: var(--c-light);
+    border: 2px solid var(--c-olive);
+    border-radius: 14px;
+    padding: .75rem 1.6rem;
+    font-weight: 700;
+  }
+  .btn-elevated:hover{
+    background: var(--c-dark);
+    border-color: var(--c-dark);
+  }
+  .btn-elevated--ghost{
+    background: var(--c-light);
+    color: var(--c-dark);
+    border: 2px solid var(--c-olive);
+  }
+  .btn-elevated--ghost:hover{
+    background: var(--c-sand);
+    border-color: var(--c-sand);
+    color: var(--c-light);
+  }
+  
   button.btn, input[type="submit"].btn { all: unset; }
   button.btn, input[type="submit"].btn {
     display:inline-flex; align-items:center; justify-content:center;
@@ -173,7 +206,6 @@
   /* ---------- Checkboxes / radios ---------- */
   input[type="checkbox"], input[type="radio"]{ accent-color: var(--c-olive); }
   
-  /* Fallback for very old browsers */
   @supports not (accent-color: red){
     label { display:inline-flex; align-items:center; gap:.5rem; }
     input[type="checkbox"], input[type="radio"]{
@@ -244,10 +276,21 @@
   .page-num.active { background: var(--c-clay); color: var(--c-light); border-color: var(--c-clay); }
   .page-btn:hover,.page-num:hover{ color: var(--c-olive); }
   
+  /* ---------- Map (Leaflet) ---------- */
+  .leaflet-container img{ max-width:none !important; } /* critical for tiles */
+  .leaflet-container{
+    background: var(--c-light);
+    border: 2px solid var(--c-olive);
+    border-radius: 12px;
+  }
+  .map-controls{ display:flex; gap:.5rem; align-items:center; margin:.25rem 0 .4rem; }
+  .map-controls .btn{ padding:.5rem .75rem; border-radius:10px; }
+  #map.map-wrap{ height:min(70vh, 760px); width:100%; }
+  
   /* ---------- Footer ---------- */
   .site-footer { padding: 14px 0 24px; color: var(--c-olive); }
   
-  /* ==================== Figma-landing ==================== */
+  /* ==================== Figma-landing (optional) ==================== */
   .fig-landing { padding: clamp(18px, 4vw, 32px) 0 clamp(28px, 6vw, 56px); }
   
   .fig-card{
@@ -255,7 +298,6 @@
     border: 2px solid var(--c-olive);
     border-radius: 26px;
     padding: clamp(18px, 4vw, 32px) clamp(18px, 5vw, 60px);
-    /* no non-palette shadow */
     max-width: 920px;
     margin: 0 auto clamp(28px, 4vw, 46px);
     text-align: center;
@@ -274,7 +316,7 @@
   .fig-lead{
     margin: 0 auto 1.2rem auto;
     max-width: 62ch;
-    color: var(--c-olive);
+    color: var(--c-dark);
     font-family: "EB Garamond", Georgia, serif;
     font-size: clamp(16px, .35vw + 15px, 18px);
     line-height: 1.55;
@@ -287,7 +329,7 @@
     margin-top: clamp(10px, 1.2vw, 14px);
   }
   
-  /* Knapper – ren palett */
+  /* Palette-only olive button variant */
   .btn-olive{
     display: inline-flex; align-items: center; justify-content: center;
     min-width: 140px;
@@ -306,9 +348,4 @@
     color: var(--c-light);
   }
   .btn-olive:active{ transform: translateY(1px); }
-  
-  /* Responsive spacing up against header/nav */
-  @media (min-width: 900px){
-    .fig-landing { padding-top: 10px; }
-  }
   
