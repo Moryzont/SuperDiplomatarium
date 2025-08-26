@@ -16,7 +16,7 @@ exclude:
   - Gemfile
   - Gemfile.lock
   - .gitignore
-  - "*.csv"
+  - letters.csv   
   
 # Collections (optional for now)
 collections:
