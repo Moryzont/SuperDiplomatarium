@@ -2,15 +2,11 @@
 
 /**
  * SuperDiplomatarium — Browser-safe search (DATE INDEX ONLY)
- * 
- * ENHANCED VERSION with Medieval Scandinavian Orthographic Matching (1100-1600)
- * 
- * - Improved fuzzy matching for Old Norse, Old Danish, Old Swedish, Old Norwegian
- * - Accounts for: phonetic variations, paleographic confusions, scribal inconsistencies
- * - Handles: þ/ð variations, k/c/q confusion, double consonants, assimilations, etc.
+ *
  * - No text indexing (no MiniSearch / n-grams).
  * - Tiny in-memory date index for fast range filtering.
  * - Progressive, cancelable scanning in batches with yield pauses.
+ * - Fuzzy matcher is lightweight and bounded.
  * - Default search fields = sammendrag+regest (combined into "sammendrag").
  * - Users may select ANY number of fields (no cap on number of fields).
  */
@@ -68,140 +64,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 function BASE() { return (window.SITE_BASE || '').replace(/\/+$/, ''); }
 function updateStatus(msg) { const el = document.getElementById('search-status'); if (el) el.textContent = msg; }
 
-// ===================== Medieval Scandinavian Orthographic Equivalences (1100-1600) =====================
-// Based on historical linguistics research for Old Norse, Old Danish, Old Swedish, Old Norwegian
-// Covers: phonetic variations, paleographic confusions, scribal inconsistencies
-
-// Single-character equivalences (phonetic & paleographic)
-const CHAR_EQUIVALENCES = [
-  // Old Norse special characters
-  ['þ', 'th', 't', 'd'],           // thorn: þ → th, t, d
-  ['ð', 'd', 'dh', 'th'],           // eth: ð → d, dh, th
-  
-  // K/C variations (Latin influence + scribal)
-  ['c', 'k', 'q'],                  // c/k/q interchangeable (Latin loans)
-  
-  // V/U/W confusion (common in medieval manuscripts)
-  ['v', 'u', 'w'],                  // v/u/w were often not distinguished
-  
-  // I/J/Y proximity (close vowels and glides)
-  ['i', 'j', 'y'],                  // i/j/y confusion, especially in diphthongs
-  
-  // F/V alternation (positional variation)
-  ['f', 'v'],                       // f/v alternation especially after vowels
-  
-  // S/Z alternation
-  ['s', 'z'],                       // s/z in certain positions
-  
-  // Vowel equivalences
-  ['æ', 'e', 'ä'],                  // æ/e/ä similar sounds
-  ['ø', 'ö', 'o'],                  // ø/ö/o similar representations  
-  ['å', 'aa', 'o'],                 // å/aa/o various forms
-  ['ǫ', 'ö', 'o'],                  // Old Norse ǫ → ö or o
-  ['œ', 'æ', 'e'],                  // Old Norse œ → æ or e
-  
-  // Palatal variations
-  ['g', 'j'],                       // g/j palatal forms
-];
-
-// Consonant clusters and digraphs (longer sequences)
-const CLUSTER_EQUIVALENCES = [
-  // K-series variations (paleographic + phonetic)
-  ['ck', 'kk', 'k', 'c'],           // ck/kk/k/c all represent /k/
-  ['kh', 'k', 'ch'],                // kh/k/ch variations
-  ['ch', 'k', 'kh'],                // ch for /k/ (Latin influence)
-  
-  // Double consonant variations (very common in medieval manuscripts)
-  ['nn', 'n'],                      // nn/n variation
-  ['ll', 'l'],                      // ll/l variation  
-  ['tt', 't'],                      // tt/t variation
-  ['dd', 'd'],                      // dd/d variation
-  ['pp', 'p'],                      // pp/p variation
-  ['gg', 'g'],                      // gg/g variation
-  ['ss', 's'],                      // ss/s variation
-  ['mm', 'm'],                      // mm/m variation
-  ['ff', 'f'],                      // ff/f variation
-  ['kk', 'k'],                      // kk/k variation
-  ['rr', 'r'],                      // rr/r variation
-  ['bb', 'b'],                      // bb/b variation
-  
-  // Danish-specific nd/nn and ld/ll alternations
-  ['nd', 'nn'],                     // Danish: nd ↔ nn (kende/kenne)
-  ['ld', 'll'],                     // Danish: ld ↔ ll (holde/holle)
-  
-  // Danish ds/ss alternation  
-  ['ds', 'ss'],                     // Danish: ds ↔ ss
-  
-  // Norwegian h-dropping
-  ['hl', 'l'],                      // Old Norwegian: hl → l
-  ['hn', 'n'],                      // Old Norwegian: hn → n  
-  ['hr', 'r'],                      // Old Norwegian: hr → r
-  
-  // Old West Norse assimilations (mp→pp, nt→tt, nk→kk)
-  ['mp', 'pp'],                     // Old West Norse: mp → pp
-  ['nt', 'tt'],                     // Old West Norse: nt → tt
-  ['nk', 'kk'],                     // Old West Norse: nk → kk
-  
-  // Th variations
-  ['th', 'þ', 't', 'd'],            // th variations
-  ['dh', 'ð', 'd'],                 // dh variations
-  
-  // G-based clusters
-  ['gh', 'g', 'h'],                 // gh variations
-  ['gj', 'j', 'g'],                 // gj palatalization
-  
-  // Latin qu → kv
-  ['qu', 'kv', 'qv'],               // Latin qu → kv in Norse
-  
-  // Long vowel representations
-  ['aa', 'å', 'a'],                 // aa/å/a
-  ['ee', 'e'],                      // ee/e
-  ['oo', 'o'],                      // oo/o
-  ['ii', 'i'],                      // ii/i
-];
-
-// Build lookup maps for fast checking
-const CHAR_EQUIV_MAP = new Map();
-for (const group of CHAR_EQUIVALENCES) {
-  for (const char of group) {
-    if (!CHAR_EQUIV_MAP.has(char)) CHAR_EQUIV_MAP.set(char, new Set());
-    for (const equiv of group) {
-      if (equiv !== char) CHAR_EQUIV_MAP.get(char).add(equiv);
-    }
-  }
-}
-
-const CLUSTER_EQUIV_MAP = new Map();
-for (const group of CLUSTER_EQUIVALENCES) {
-  for (const cluster of group) {
-    if (!CLUSTER_EQUIV_MAP.has(cluster)) CLUSTER_EQUIV_MAP.set(cluster, new Set());
-    for (const equiv of group) {
-      if (equiv !== cluster) CLUSTER_EQUIV_MAP.get(cluster).add(equiv);
-    }
-  }
-}
-
-// ===================== Enhanced fuzzy matching functions =====================
-
+// ===================== Light fuzzy tools =====================
 function normalizeForScoring(s) {
   return (s || '').toLowerCase().replace(/-\s*/g, '');
 }
-
 function tokenizeCanonical(s, cap = MAX_TOKENS_PER_FIELD) {
   const joined = normalizeForScoring(s);
-  const rx = /[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüßǫ]+/gi;
+  const rx = /[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+/gi;
   const out = [];
   let m;
   while ((m = rx.exec(joined)) && out.length < cap) out.push(m[0]);
   return out;
 }
-
 function bigramsOf(s) {
   const out = [];
   for (let i = 0; i < s.length - 1; i++) out.push(s.slice(0, i + 2));
   return out;
 }
-
 function diceCoeff(a, b) {
   if (!a.length || !b.length) return 0;
   const m = new Map();
@@ -214,26 +93,13 @@ function diceCoeff(a, b) {
   return (2 * inter) / (a.length + b.length);
 }
 
+const CONFUSION_GROUPS = [['d','t'], ['v','u','w'], ['i','j','y'], ['c','k','q']];
 function inSameGroup(a, b) {
   if (a === b) return true;
-  
-  // Check single character equivalences
-  const aSet = CHAR_EQUIV_MAP.get(a);
-  if (aSet && aSet.has(b)) return true;
-  
+  for (const g of CONFUSION_GROUPS) if (g.includes(a) && g.includes(b)) return true;
   return false;
 }
-
-function subCost(a, b) {
-  if (a === b) return 0;
-  if (inSameGroup(a, b)) return 0.25;  // Very low cost for known equivalences
-  
-  // Additional paleographic confusions (minims: u/n/m/i confusion in Gothic scripts)
-  const minimChars = ['u', 'n', 'm', 'i'];
-  if (minimChars.includes(a) && minimChars.includes(b)) return 0.5;
-  
-  return 1;
-}
+function subCost(a, b) { return a === b ? 0 : (inSameGroup(a, b) ? 0.35 : 1); }
 
 function weightedEdit(a, b, maxCostHint) {
   const m = a.length, n = b.length;
@@ -268,63 +134,6 @@ function weightedEdit(a, b, maxCostHint) {
   return prev[n];
 }
 
-function clusterAwareDistance(queryToken, docToken) {
-  // First, try cluster-level matching
-  // Check if query token contains any known clusters
-  let qExpanded = [queryToken];
-  let dExpanded = [docToken];
-  
-  // Expand query token with cluster equivalences
-  for (const [cluster, equivs] of CLUSTER_EQUIV_MAP) {
-    if (queryToken.includes(cluster)) {
-      const newVariants = [];
-      for (const q of qExpanded) {
-        if (q.includes(cluster)) {
-          newVariants.push(q);  // Keep original
-          for (const equiv of equivs) {
-            newVariants.push(q.replace(new RegExp(cluster, 'g'), equiv));
-          }
-        } else {
-          newVariants.push(q);
-        }
-      }
-      qExpanded = newVariants.slice(0, 10); // Limit expansion
-    }
-  }
-  
-  // Expand doc token with cluster equivalences
-  for (const [cluster, equivs] of CLUSTER_EQUIV_MAP) {
-    if (docToken.includes(cluster)) {
-      const newVariants = [];
-      for (const d of dExpanded) {
-        if (d.includes(cluster)) {
-          newVariants.push(d);  // Keep original
-          for (const equiv of equivs) {
-            newVariants.push(d.replace(new RegExp(cluster, 'g'), equiv));
-          }
-        } else {
-          newVariants.push(d);
-        }
-      }
-      dExpanded = newVariants.slice(0, 10); // Limit expansion
-    }
-  }
-  
-  // Find minimum distance among all variant combinations
-  let minDist = Infinity;
-  for (const q of qExpanded) {
-    for (const d of dExpanded) {
-      const maxLen = Math.max(q.length, d.length);
-      const we = weightedEdit(q, d, Math.ceil(maxLen * 0.5)) / maxLen;
-      const dice = 1 - diceCoeff(bigramsOf(q), bigramsOf(d));
-      const dist = 0.7 * we + 0.3 * dice;
-      if (dist < minDist) minDist = dist;
-    }
-  }
-  
-  return minDist;
-}
-
 function getCachedDistance(a, b) {
   const key = `${a}|${b}`;
   const hit = DISTANCE_CACHE.get(key);
@@ -332,16 +141,14 @@ function getCachedDistance(a, b) {
 
   const q = a.toLowerCase(), w = b.toLowerCase();
   let dist;
-  
-  if (q === w) {
-    dist = 0;
-  } else if (w.startsWith(q) || q.startsWith(w)) {
-    dist = 0.1;
-  } else {
-    // Use cluster-aware distance calculation
-    dist = clusterAwareDistance(q, w);
+  if (q === w) dist = 0;
+  else if (w.startsWith(q) || q.startsWith(w)) dist = 0.1;
+  else {
+    const maxLen = Math.max(q.length, w.length);
+    const we = weightedEdit(q, w, Math.ceil(maxLen * 0.5)) / maxLen;
+    const dice = 1 - diceCoeff(bigramsOf(q), bigramsOf(w));
+    dist = 0.7 * we + 0.3 * dice;
   }
-  
   if (DISTANCE_CACHE.size > MAX_CACHE_SIZE) DISTANCE_CACHE.clear();
   DISTANCE_CACHE.set(key, dist);
   return dist;
@@ -349,8 +156,7 @@ function getCachedDistance(a, b) {
 
 function thresholdFor(dist) {
   const d = Math.max(0, Math.min(3, parseInt(dist || '1', 10)));
-  // Adjusted thresholds to account for better matching
-  return [0.32, 0.40, 0.48, 0.56][d];
+  return [0.28, 0.34, 0.42, 0.50][d];
 }
 
 // ===================== Date index helpers =====================
@@ -751,7 +557,7 @@ function highlightExact(text, query) {
 
 function markHyphenPairs(text, shouldMarkCombined) {
   const clipped = text.length > MAX_SECTION_CHARS.default ? text.slice(0, MAX_SECTION_CHARS.default) + '…' : text;
-  const rx = /([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüßǫ]+)-(\s+)([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüßǫ]+)/gi;
+  const rx = /([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)-(\s+)([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)/gi;
   return (clipped || '').replace(rx, (m, a, ws, b) =>
     shouldMarkCombined((a + b).toLowerCase()) ? '<mark>' + a + '-' + ws + b + '</mark>' : m
   );
@@ -773,7 +579,7 @@ function highlightFuzzy(text, queryTokens, fuzzyDistSetting) {
     return false;
   });
 
-  const tokenRx = /[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüßǫ\-]+/gi;
+  const tokenRx = /[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß\-]+/gi;
   return highlightOutsideMarks(escapeHtml(withPairs), (frag) => {
     return frag.replace(tokenRx, (m) => {
       let best = Infinity;
