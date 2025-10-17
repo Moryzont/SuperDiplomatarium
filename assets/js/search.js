@@ -145,6 +145,9 @@ function diceCoeff(a, b) {
   return (2 * inter) / (a.length + b.length);
 }
 
+// Vowel set for distinguishing vowel vs consonant changes
+const VOWELS = new Set('aeiouyæøåöäǫœáéíóúý');
+
 function inSameGroup(a, b) {
   if (a === b) return true;
   const equiv = CHAR_EQUIV[a];
@@ -153,13 +156,29 @@ function inSameGroup(a, b) {
 
 function subCost(a, b) {
   if (a === b) return 0;
-  if (inSameGroup(a, b)) return 0.2;  // Low cost for known equivalences
   
-  // Minim confusion (u/n/m/i in Gothic scripts)
-  const minims = 'unmi';
-  if (minims.includes(a) && minims.includes(b)) return 0.4;
+  const aIsVowel = VOWELS.has(a);
+  const bIsVowel = VOWELS.has(b);
   
-  return 1;
+  // Both are vowels - very low cost for vowel changes
+  if (aIsVowel && bIsVowel) {
+    if (inSameGroup(a, b)) return 0.1;  // Known vowel equivalence (æ/e, ø/o, etc)
+    return 0.2;  // Any vowel to vowel change is relatively cheap
+  }
+  
+  // Both are consonants
+  if (!aIsVowel && !bIsVowel) {
+    if (inSameGroup(a, b)) return 0.15;  // Known consonant equivalence (þ/th, k/c, etc)
+    
+    // Minim confusion (u/n/m/i in Gothic scripts) - special case
+    const minims = 'unmi';
+    if (minims.includes(a) && minims.includes(b)) return 0.3;
+    
+    return 0.7;  // Other consonant changes are expensive
+  }
+  
+  // Vowel to consonant or vice versa - very expensive
+  return 1.0;
 }
 
 function weightedEdit(a, b, maxCostHint) {
@@ -202,14 +221,33 @@ function getCachedDistance(a, b) {
 
   const q = a.toLowerCase(), w = b.toLowerCase();
   let dist;
-  if (q === w) dist = 0;
-  else if (w.startsWith(q) || q.startsWith(w)) dist = 0.1;
-  else {
+  if (q === w) {
+    dist = 0;
+  } else if (w.startsWith(q) || q.startsWith(w)) {
+    dist = 0.1;
+  } else {
     const maxLen = Math.max(q.length, w.length);
+    const minLen = Math.min(q.length, w.length);
+    
+    // Calculate raw edit distance
     const we = weightedEdit(q, w, Math.ceil(maxLen * 0.5)) / maxLen;
     const dice = 1 - diceCoeff(bigramsOf(q), bigramsOf(w));
-    dist = 0.7 * we + 0.3 * dice;
+    let rawDist = 0.7 * we + 0.3 * dice;
+    
+    // Length-based scaling: longer words get more tolerance
+    // For words < 4 chars: use raw distance (strict)
+    // For words 4-8 chars: scale down slightly
+    // For words > 8 chars: scale down more
+    let scaleFactor = 1.0;
+    if (minLen >= 4) {
+      // Scale factor reduces distance for longer words
+      // sqrt scaling: 4→1.0, 6→0.92, 8→0.87, 10→0.84, 12→0.81
+      scaleFactor = 1.0 / Math.sqrt(1 + (minLen - 4) * 0.08);
+    }
+    
+    dist = rawDist * scaleFactor;
   }
+  
   if (DISTANCE_CACHE.size > MAX_CACHE_SIZE) {
     // Clear oldest half
     const entries = Array.from(DISTANCE_CACHE.entries());
@@ -224,7 +262,13 @@ function getCachedDistance(a, b) {
 
 function thresholdFor(dist) {
   const d = Math.max(0, Math.min(3, parseInt(dist || '1', 10)));
-  return [0.30, 0.38, 0.46, 0.54][d];
+  // Streng (0): 0.08 - almost exact, only cluster normalization (nn→n, ck→k, þ→th)
+  //             Will NOT match vowel changes or consonant substitutions
+  // Moderat (1): 0.28 - typical medieval variations including vowel changes (a/e, i/y)
+  //              and known consonant equivalences (k/c, þ/th, v/u)
+  // Avslappet (2): 0.45 - more lenient, allows multiple variations
+  // Veldig (3): 0.58 - very loose for rare/uncertain spellings
+  return [0.08, 0.28, 0.45, 0.58][d];
 }
 
 // ===================== Date index helpers =====================
