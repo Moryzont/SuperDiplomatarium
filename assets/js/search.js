@@ -267,7 +267,7 @@ function getCachedDistance(a, b) {
 }
 
 function thresholdFor(dist) {
-  const d = Math.max(0, Math.min(3, parseInt(dist || '1', 10)));
+  const d = Math.max(0, Math.min(3, parseInt(dist ?? '1', 10)));
   // Streng (0): 0.18 - exact + cluster normalization + single vowel change
   //             Hamar matches: Hamar, Hammar, Hammer (→hamer), Hamer
   //             Hamar does NOT match: ham (prefix too short), har (consonant change)
@@ -577,6 +577,8 @@ async function performSearch() {
   const needle = qRaw.toLowerCase();
   const queryTokens = tokenizeCanonical(qRaw).filter(t => t.length); // for fuzzy
 
+  console.log('Search:', { qRaw, fuzzyDistance, searchMode, threshold: thresholdFor(fuzzyDistance), queryTokens });
+
   // Fast path: nothing to search and no date range
   if (!needle && !hasDateFilter) {
     currentResultsAll = [];
@@ -857,9 +859,16 @@ function wireListeners(){
   }
 
   if (fuzzySlider) {
+    // Initialize slider to default value (Streng = 0)
+    fuzzySlider.value = fuzzyDistance;
+    const label = document.getElementById('fuzzy-label');
+    if (label) {
+      const labels = ['Streng', 'Moderat', 'Avslappet', 'Veldig avslappet'];
+      label.textContent = labels[fuzzyDistance] || 'Streng';
+    }
+    
     fuzzySlider.addEventListener('input', () => {
       fuzzyDistance = parseInt(fuzzySlider.value, 10);
-      const label = document.getElementById('fuzzy-label');
       if (label) {
         const labels = ['Streng', 'Moderat', 'Avslappet', 'Veldig avslappet'];
         label.textContent = labels[fuzzyDistance] || 'Moderat';
