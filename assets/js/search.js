@@ -1,11 +1,10 @@
 /* global MiniSearch, document, window, fetch */
 
 /**
- * SuperDiplomatarium – Enhanced Search with Advanced Fuzzy Matching
- * - Weighted edit distance with letter confusion groups
- * - Exact vs. Fuzzy search modes
- * - Adjustable fuzzy distance
- * - All existing features preserved (date filtering, field selection, etc.)
+ * SuperDiplomatarium – Fixed Enhanced Search
+ * - Proper exact vs fuzzy search behavior
+ * - Working fuzzy distance threshold
+ * - Fixed date filtering
  */
 
 // =============== Globals ===============
@@ -21,9 +20,9 @@ let currentResultsShown = [];
 let currentPage = 1;
 const PAGE_SIZE = 50;
 
-// Fuzzy search state
-let searchMode = 'fuzzy'; // 'exact' or 'fuzzy'
-let fuzzyDistance = 1; // 0-3
+// Search state
+let searchMode = 'fuzzy';
+let fuzzyDistance = 1;
 
 document.addEventListener('DOMContentLoaded', async () => {
   await initializeSearch();
@@ -33,12 +32,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   wirePagination();
 });
 
-// baseurl helper
 function BASE() { return (window.SITE_BASE || '').replace(/\/+$/, ''); }
 function updateStatus(msg) { const el = document.getElementById('search-status'); if (el) el.textContent = msg; }
 
-// =============== Fuzzy Search Algorithm (from viewer.html) ===============
-function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+// =============== Fuzzy Search Algorithm ===============
 function normalizeForScoring(s) { return (s || '').toLowerCase().replace(/-\s+/g, ''); }
 function tokenizeCanonical(s) { 
   const joined = normalizeForScoring(s); 
@@ -79,7 +76,6 @@ function weightedEdit(a, b, maxCostHint) {
       const costIns = curr[j - 1] + 1, costDel = prev[j] + 1;
       let val = Math.min(costSub, costIns, costDel);
       
-      // Transposition
       if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
         val = Math.min(val, prev[j - 2] + subCost(a[i - 2], b[j - 2]));
       }
@@ -135,58 +131,48 @@ function thresholdFor(dist) {
   return [0.28, 0.34, 0.42, 0.50][d];
 }
 
-function highlightOutsideMarks(html, highlighterFn) {
-  const parts = html.split(/(<mark>.*?<\/mark>)/gis);
-  return parts.map(seg => (seg.toLowerCase().startsWith('<mark>') ? seg : highlighterFn(seg))).join('');
-}
-
-function markHyphenPairs(text, shouldMarkCombined) {
-  const rx = /([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)-(\s+)([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)/gi;
-  return (text || '').replace(rx, (m, a, ws, b) => 
-    shouldMarkCombined((a + b).toLowerCase()) ? '<mark>' + a + '-' + ws + b + '</mark>' : m
-  );
-}
-
-function highlightFuzzy(text, queryTokens, fuzzyDistSetting) {
-  if (queryTokens.length === 0) return escapeHtml(text);
-  const th = thresholdFor(fuzzyDistSetting);
+// Check if document matches fuzzy search
+function docMatchesFuzzy(doc, queryTokens, fields, threshold) {
+  if (queryTokens.length === 0) return true;
   
-  const withPairs = markHyphenPairs(text, (joined) => {
-    for (const q of queryTokens) 
-      if (tokenDistance(q, joined) <= th) return true;
-    return false;
-  });
-  
-  const tokenRx = /[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß\-]+/gi;
-  return highlightOutsideMarks(withPairs, (frag) => {
-    return escapeHtml(frag).replace(tokenRx, (m) => {
-      const unescaped = m.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-      let best = Infinity;
-      for (const q of queryTokens) {
-        const d = tokenDistance(q, unescaped.toLowerCase());
-        if (d < best) best = d;
-        if (best === 0) break;
+  for (const field of fields) {
+    const text = normalizeForScoring(doc[field] || '');
+    const docTokens = tokenizeCanonical(text);
+    
+    // Check if all query tokens have a match within threshold
+    let allMatch = true;
+    for (const qToken of queryTokens) {
+      let foundMatch = false;
+      
+      // Check hyphenated combinations
+      for (let i = 0; i < docTokens.length - 1; i++) {
+        const combined = docTokens[i] + docTokens[i + 1];
+        if (tokenDistance(qToken, combined) <= threshold) {
+          foundMatch = true;
+          break;
+        }
       }
-      return best <= th ? '<mark>' + m + '</mark>' : m;
-    });
-  });
-}
-
-function highlightExact(text, query) {
-  if (!query) return escapeHtml(text);
-  const escaped = escapeHtml(text);
-  const rx = new RegExp(escapeRegex(query), 'gi');
-  let out = escaped.replace(rx, '<mark>$&</mark>');
-  
-  // Handle hyphenated words
-  const pairRx = /([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)-(\s+)([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)/gi;
-  out = out.replace(pairRx, (m, a, ws, b) => {
-    if ((a + b).toLowerCase() === query.toLowerCase()) {
-      return '<mark>' + a + '-' + ws + b + '</mark>';
+      
+      if (!foundMatch) {
+        // Check individual tokens
+        for (const dToken of docTokens) {
+          if (tokenDistance(qToken, dToken) <= threshold) {
+            foundMatch = true;
+            break;
+          }
+        }
+      }
+      
+      if (!foundMatch) {
+        allMatch = false;
+        break;
+      }
     }
-    return m;
-  });
-  return out;
+    
+    if (allMatch) return true;
+  }
+  
+  return false;
 }
 
 // =============== Init + Loading ===============
@@ -209,7 +195,11 @@ async function initializeSearch() {
         'sted_dn','sted_rn','normalized_name','sted_all',
         'kilde','fotnoter','tillegg'
       ],
-      searchOptions: { boost:{ sted_all:4, sammendrag:3, brevtekst:2 }, fuzzy:0.2, prefix:true }
+      searchOptions: { 
+        boost:{ sted_all:4, sammendrag:3, brevtekst:2 }, 
+        fuzzy: false,  // We handle fuzzy manually
+        prefix: true 
+      }
     });
 
     await loadChunk(0);
@@ -276,132 +266,105 @@ function normalizeLetter(raw, chunkIndex, rowIndex) {
     DN_ref: dn || undefined,
     RN_ref: rn || undefined,
     SDN_ID: sdn || undefined,
-
     sammendrag: sammendrag_index,
     sammendrag_raw,
     regest,
     brevtekst,
-
     date_start, date_end,
     date_rn_text: date_rn_txt,
     date_dn_text: date_dn_txt,
     ORD_START: ORD_START ?? null,
     ORD_END: ORD_END ?? ORD_START ?? null,
-
     sted_dn, sted_rn, normalized_name, sted_all,
-
     kilde: kildeCombined,
     fotnoter: fotnoterCombined,
     tillegg,
-
     _raw: raw
   };
 }
 
-// =============== Query parsing & helpers ===============
-function parseQuery(q) {
-  const orGroups = [];
-  const groups = splitByOr(q);
-  for (const g of groups) {
-    const group = { must: [], not: [], filters: {} };
-    const parts = tokenize(g);
-    for (const part of parts) {
-      if (/^year:\d{3,4}\.\.\d{3,4}$/i.test(part)) {
-        const [y1,y2] = part.split(':')[1].split('..').map(Number);
-        group.filters.fromOrd = dateStrToOrd(String(y1), false);
-        group.filters.toOrd   = dateStrToOrd(String(y2), true);
-        continue;
-      }
-      if (/^before:\d{3,4}([\-\.]\d{1,2}([\-\.]\d{1,2})?)?$/i.test(part)) { group.filters.toOrd = dateStrToOrd(part.split(':')[1].replace(/\./g,'-'), true);  continue; }
-      if (/^after:\d{3,4}([\-\.]\d{1,2}([\-\.]\d{1,2})?)?$/i.test(part))  { group.filters.fromOrd = dateStrToOrd(part.split(':')[1].replace(/\./g,'-'), false); continue; }
-      if (/^on:\d{3,4}([\-\.]\d{1,2}([\-\.]\d{1,2})?)?$/i.test(part))    { const ds=part.split(':')[1].replace(/\./g,'-'); group.filters.fromOrd=dateStrToOrd(ds,false); group.filters.toOrd=dateStrToOrd(ds,true); continue; }
-      if (/^date:\S+\.\.\S+$/i.test(part)) { const [a,b]=part.split(':')[1].split('..'); group.filters.fromOrd=dateStrToOrd(a.replace(/\./g,'-'),false); group.filters.toOrd=dateStrToOrd(b.replace(/\./g,'-'),true); continue; }
-      if (/^date:\d{3,4}([\-\.]\d{1,2}([\-\.]\d{1,2})?)?$/i.test(part)) { const ds=part.split(':')[1].replace(/\./g,'-'); group.filters.fromOrd=dateStrToOrd(ds,false); group.filters.toOrd=dateStrToOrd(ds,true); continue; }
-
-      const m = part.match(/^([a-z_]+):(.*)$/i);
-      let field = null, term = part, isPhrase = false, neg = false;
-      if (m) { field = m[1].toLowerCase(); term = m[2]; }
-      if (/^NOT\s+/i.test(term)) { neg = true; term = term.replace(/^NOT\s+/i, ''); }
-      if (term.startsWith('-')) { neg = true; term = term.slice(1); }
-      const quoted = term.match(/^"(.*)"$/);
-      if (quoted) { isPhrase = true; term = quoted[1]; }
-      const node = { field, term, isPhrase };
-      if (neg) group.not.push(node); else group.must.push(node);
-    }
-    orGroups.push(group);
-  }
-  return orGroups;
-}
-
-function tokenize(s) { const out=[]; let buf=''; let inQ=false; for (let i=0;i<s.length;i++){ const ch=s[i]; if(ch==='"'){ buf+=ch; inQ=!inQ; continue;} if(!inQ && /\s/.test(ch)){ if(buf.trim()) out.push(buf.trim()); buf=''; } else { buf+=ch; } } if(buf.trim()) out.push(buf.trim()); return out; }
-function splitByOr(s){ const out=[]; let buf=''; let inQ=false; for(let i=0;i<s.length;i++){ const ch=s[i]; if(ch==='"'){ inQ=!inQ; buf+=ch; continue;} if(!inQ && s.slice(i,i+2).toUpperCase()==='OR' && /\s/.test(s[i-1]||' ') && /\s/.test(s[i+2]||' ')){ out.push(buf.trim()); buf=''; i+=1; } else buf+=ch; } if(buf.trim()) out.push(buf.trim()); return out; }
-function norm(s){ return (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
-
-function fieldListForCheckboxes() {
-  const fields = [];
-  if (document.getElementById('search-sammendrag').checked) fields.push('sammendrag');
-  if (document.getElementById('search-brevtekst').checked)  fields.push('brevtekst');
-  if (document.getElementById('search-sted').checked)       fields.push('sted_all');
-  if (document.getElementById('search-kilde').checked)      fields.push('kilde');
-  return fields.length ? fields : ['sammendrag','brevtekst','sted_all','kilde'];
-}
-function mapScopedField(f){ if(!f) return null; const m={'sammendrag':'sammendrag','brevtekst':'brevtekst','sted':'sted_all','kilde':'kilde','dn':'DN_ref','sdn':'SDN_ID'}; return m[f]||null; }
-
 // =============== Date helpers ===============
 function dateStrToOrd(s, endSide){
-  if(!s) return null; const str=String(s).trim();
-  let m=str.match(/^(\d{3,4})-(\d{1,2})-(\d{1,2})$/);
-  if(m){ const y=clampYear(+m[1]); const mo=clampMonth(+m[2]); const d=clampDay(y,mo,+m[3]); return y*10000+mo*100+d; }
-  m=str.match(/^(\d{3,4})-(\d{1,2})$/);
-  if(m){ const y=clampYear(+m[1]); const mo=clampMonth(+m[2]); const d=endSide?daysInMonth(y,mo):1; return y*10000+mo*100+d; }
-  m=str.match(/^(\d{3,4})$/);
-  if(m){ const y=clampYear(+m[1]); const mo=endSide?12:1; const d=endSide?31:1; return y*10000+mo*100+d; }
-  const alt=str.replace(/\./g,'-'); if(alt!==str) return dateStrToOrd(alt,endSide);
+  if(!s) return null; 
+  const str = String(s).trim();
+  let m = str.match(/^(\d{3,4})-(\d{1,2})-(\d{1,2})$/);
+  if(m){ 
+    const y = clampYear(+m[1]); 
+    const mo = clampMonth(+m[2]); 
+    const d = clampDay(y, mo, +m[3]); 
+    return y * 10000 + mo * 100 + d; 
+  }
+  m = str.match(/^(\d{3,4})-(\d{1,2})$/);
+  if(m){ 
+    const y = clampYear(+m[1]); 
+    const mo = clampMonth(+m[2]); 
+    const d = endSide ? daysInMonth(y, mo) : 1; 
+    return y * 10000 + mo * 100 + d; 
+  }
+  m = str.match(/^(\d{3,4})$/);
+  if(m){ 
+    const y = clampYear(+m[1]); 
+    const mo = endSide ? 12 : 1; 
+    const d = endSide ? 31 : 1; 
+    return y * 10000 + mo * 100 + d; 
+  }
+  const alt = str.replace(/\./g, '-'); 
+  if(alt !== str) return dateStrToOrd(alt, endSide);
   return null;
 }
-function daysInMonth(y,m){ if(m===2) return (y%4===0 && (y%100!==0 || y%400===0))?29:28; return [4,6,9,11].includes(m)?30:31; }
-function clampYear(y){ return Math.min(Math.max(y,1),9999); }
-function clampMonth(m){ return Math.min(Math.max(m,1),12); }
-function clampDay(y,m,d){ return Math.min(Math.max(d,1),daysInMonth(y,m)); }
+
+function daysInMonth(y, m){ 
+  if(m === 2) return (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)) ? 29 : 28; 
+  return [4, 6, 9, 11].includes(m) ? 30 : 31; 
+}
+
+function clampYear(y){ return Math.min(Math.max(y, 1), 9999); }
+function clampMonth(m){ return Math.min(Math.max(m, 1), 12); }
+function clampDay(y, m, d){ return Math.min(Math.max(d, 1), daysInMonth(y, m)); }
 
 function readUIRangeOrd(){
-  const fromEl=document.getElementById('date-from');
-  const toEl=document.getElementById('date-to');
-  const exact=document.getElementById('date-exact')?.checked;
+  const fromEl = document.getElementById('date-from');
+  const toEl = document.getElementById('date-to');
+  const exact = document.getElementById('date-exact')?.checked;
 
-  const fv=(fromEl?.value||'').trim();
-  const tv=(toEl?.value||'').trim();
+  const fv = (fromEl?.value || '').trim();
+  const tv = (toEl?.value || '').trim();
 
   if(exact){
-    if(!fv) return { fromOrd:null, toOrd:null };
-    return { fromOrd: dateStrToOrd(fv,false), toOrd: dateStrToOrd(fv,true) };
+    if(!fv) return { fromOrd: null, toOrd: null };
+    return { fromOrd: dateStrToOrd(fv, false), toOrd: dateStrToOrd(fv, true) };
   }
-  const fromOrd = fv ? dateStrToOrd(fv,false) : null;
-  const toOrd   = tv ? dateStrToOrd(tv,true)  : null;
+  const fromOrd = fv ? dateStrToOrd(fv, false) : null;
+  const toOrd   = tv ? dateStrToOrd(tv, true)  : null;
   return { fromOrd, toOrd };
 }
 
-// =============== Execution ===============
+function fieldListForCheckboxes() {
+  const fields = [];
+  if (document.getElementById('search-sammendrag')?.checked) fields.push('sammendrag');
+  if (document.getElementById('search-brevtekst')?.checked)  fields.push('brevtekst');
+  if (document.getElementById('search-sted')?.checked)       fields.push('sted_all');
+  if (document.getElementById('search-kilde')?.checked)      fields.push('kilde');
+  return fields.length ? fields : ['sammendrag', 'brevtekst', 'sted_all', 'kilde'];
+}
+
+// =============== Search Execution ===============
 function performSearch() {
   const q = (document.getElementById('search-input')?.value || '').trim();
-  const qUsable = q.length >= 2;
-
   const { fromOrd: uiFrom, toOrd: uiTo } = readUIRangeOrd();
   const hasDateFilter = (uiFrom != null || uiTo != null);
   const selectedFields = fieldListForCheckboxes();
 
-  let unionMap = new Map();
+  // Get current search mode and fuzzy distance from UI
+  const modeEl = document.getElementById('search-mode');
+  if (modeEl) searchMode = modeEl.value;
+  
+  const fuzzyEl = document.getElementById('fuzzy-distance');
+  if (fuzzyEl) fuzzyDistance = parseInt(fuzzyEl.value, 10);
 
-  if (!qUsable && hasDateFilter) {
-    const dummyGroup = { must: [], not: [], filters: { fromOrd: uiFrom, toOrd: uiTo } };
-    unionMap = runAndGroup(dummyGroup, selectedFields, uiFrom, uiTo);
-  } else if (qUsable) {
-    const orGroups = parseQuery(q);
-    for (const group of orGroups) {
-      const set = runAndGroup(group, selectedFields, uiFrom, uiTo);
-      for (const [id, score] of set) unionMap.set(id, Math.max(unionMap.get(id) || 0, score));
-    }
-  } else {
+  let results = [];
+
+  if (!q && !hasDateFilter) {
     currentResultsAll = [];
     currentPage = 1;
     updateResults([]);
@@ -410,97 +373,139 @@ function performSearch() {
     return;
   }
 
-  currentResultsAll = Array.from(unionMap.entries())
-    .map(([id, score]) => ({ id, score }))
-    .sort((a,b) => b.score - a.score)
-    .map(r => Object.assign({}, DOCS.get(r.id) || {}, { score: r.score, query: q }));
+  if (!q && hasDateFilter) {
+    // Date-only search
+    results = allLetters.filter(doc => dateMatches(doc, uiFrom, uiTo));
+  } else if (searchMode === 'exact') {
+    // Exact search
+    const miniResults = searchIndex.search(q, { 
+      fields: selectedFields, 
+      combineWith: 'AND',
+      fuzzy: false,
+      prefix: false
+    });
+    
+    const resultIds = new Set(miniResults.map(r => r.id));
+    results = allLetters.filter(doc => {
+      if (!resultIds.has(doc.id)) return false;
+      if (hasDateFilter && !dateMatches(doc, uiFrom, uiTo)) return false;
+      return true;
+    });
+  } else {
+    // Fuzzy search
+    const queryTokens = tokenizeCanonical(q);
+    const threshold = thresholdFor(fuzzyDistance);
+    
+    // First get candidates from MiniSearch with prefix matching
+    const miniResults = searchIndex.search(q, { 
+      fields: selectedFields,
+      combineWith: 'OR',
+      fuzzy: false,
+      prefix: true,
+      boost: { sted_all: 4, sammendrag: 3, brevtekst: 2 }
+    });
+    
+    // Get top candidates (to avoid checking all 25k docs)
+    const candidateIds = new Set(miniResults.slice(0, 5000).map(r => r.id));
+    
+    // Then filter by fuzzy matching and date
+    results = allLetters.filter(doc => {
+      // If not in candidates and we have enough candidates, skip
+      if (candidateIds.size > 100 && !candidateIds.has(doc.id)) return false;
+      
+      // Check fuzzy match
+      if (!docMatchesFuzzy(doc, queryTokens, selectedFields, threshold)) return false;
+      
+      // Check date filter
+      if (hasDateFilter && !dateMatches(doc, uiFrom, uiTo)) return false;
+      
+      return true;
+    });
+  }
 
+  // Store results with query for highlighting
+  currentResultsAll = results.map(r => Object.assign({}, r, { query: q }));
   currentPage = 1;
   renderPage();
   setExportEnabled(currentResultsAll.length > 0);
 }
 
+function dateMatches(doc, fromOrd, toOrd) {
+  if (fromOrd == null && toOrd == null) return true;
+  
+  const F = fromOrd ?? -Infinity;
+  const T = toOrd ?? Infinity;
+  const S = doc.ORD_START ?? -Infinity;
+  const E = (doc.ORD_END ?? doc.ORD_START) ?? Infinity;
+  
+  return S <= T && E >= F;
+}
+
 function renderPage(){
-  const total=currentResultsAll.length;
-  const totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
-  if(currentPage>totalPages) currentPage=totalPages;
-  const start=(currentPage-1)*PAGE_SIZE;
-  const end=Math.min(start+PAGE_SIZE,total);
-  currentResultsShown=currentResultsAll.slice(start,end);
-  updateResults(currentResultsShown,start+1,end,total);
+  const total = currentResultsAll.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if(currentPage > totalPages) currentPage = totalPages;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const end = Math.min(start + PAGE_SIZE, total);
+  currentResultsShown = currentResultsAll.slice(start, end);
+  updateResults(currentResultsShown, start + 1, end, total);
   renderPagination(total);
 }
 
-function runAndGroup(group, selectedFields, uiFromOrd=null, uiToOrd=null){
-  const mustSets=[];
-  for(const term of group.must){
-    const fields = mapScopedField(term.field)?[mapScopedField(term.field)]:selectedFields;
-    mustSets.push(searchForNode(term, fields));
-  }
-  let acc = mustSets.length ? mustSets[0] : allDocsAsSet();
-  for(let i=1;i<mustSets.length;i++) acc = intersectScoreMaps(acc, mustSets[i]);
+// =============== Highlighting ===============
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
-  for(const n of group.not){
-    const fields = mapScopedField(n.field)?[mapScopedField(n.field)]:selectedFields;
-    const exclude = searchForNode(n, fields);
-    for(const id of exclude.keys()) acc.delete(id);
-  }
-
-  const f1=group.filters.fromOrd ?? null;
-  const t1=group.filters.toOrd   ?? null;
-  const from = (f1!=null && uiFromOrd!=null)? Math.max(f1,uiFromOrd) : (f1!=null?f1:uiFromOrd);
-  const to   = (t1!=null && uiToOrd  !=null)? Math.min(t1,uiToOrd)   : (t1!=null?t1:uiToOrd);
-
-  if(from!=null || to!=null){
-    const F = from ?? -Infinity, T = to ?? +Infinity;
-    for(const id of Array.from(acc.keys())){
-      const d = DOCS.get(id);
-      const S = d?.ORD_START ?? -Infinity;
-      const E = (d?.ORD_END ?? d?.ORD_START) ?? +Infinity;
-      const overlaps = S <= T && E >= F;
-      if(!overlaps) acc.delete(id);
-    }
-  }
-  return acc;
+function highlightExact(text, query) {
+  if (!query) return escapeHtml(text);
+  const escaped = escapeHtml(text);
+  const rx = new RegExp(escapeRegex(query), 'gi');
+  return escaped.replace(rx, '<mark>$&</mark>');
 }
 
-function allDocsAsSet(){ const m=new Map(); for(const id of DOCS.keys()) m.set(id,1); return m; }
-
-function searchForNode(node, fields){
-  if(fields.length===1 && (fields[0]==='DN_ref' || fields[0]==='SDN_ID')){
-    const needle=norm(node.term); const m=new Map();
-    for(const d of DOCS.values()){ const val=norm(d[fields[0]]); if(val && val===needle) m.set(d.id,100); }
-    return m;
-  }
-  if(node.isPhrase) return phraseSearch(node.term, fields);
-  const res = searchIndex.search(node.term, { fields, limit:100000, combineWith:'AND' });
-  const m=new Map(); for(const r of res) m.set(r.id, Math.max(m.get(r.id)||0, r.score||1)); return m;
+function markHyphenPairs(text, shouldMarkCombined) {
+  const rx = /([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)-(\s+)([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)/gi;
+  return (text || '').replace(rx, (m, a, ws, b) => 
+    shouldMarkCombined((a + b).toLowerCase()) ? '<mark>' + a + '-' + ws + b + '</mark>' : m
+  );
 }
 
-function phraseSearch(phrase, fields){
-  const words=phrase.split(/\s+/).filter(Boolean);
-  let cand=null;
-  for(const w of words){
-    const res=searchIndex.search(w,{ fields, limit:100000, combineWith:'AND' });
-    const m=new Map(); for(const r of res) m.set(r.id, Math.max(m.get(r.id)||0, r.score||1));
-    cand=cand?intersectScoreMaps(cand,m):m; if(!cand.size) break;
-  }
-  if(!cand||!cand.size) return new Map();
-  const needle=norm(phrase); const out=new Map();
-  for(const id of cand.keys()){
-    const doc=DOCS.get(id);
-    for(const f of fields){ const hay=norm(doc?.[f]||''); if(hay.includes(needle)){ out.set(id, Math.max(out.get(id)||0, (cand.get(id)||1)+5)); break; } }
-  }
-  return out;
+function highlightOutsideMarks(html, highlighterFn) {
+  const parts = html.split(/(<mark>.*?<\/mark>)/gis);
+  return parts.map(seg => (seg.toLowerCase().startsWith('<mark>') ? seg : highlighterFn(seg))).join('');
 }
 
-function intersectScoreMaps(a,b){ const out=new Map(); for(const [id,sa] of a.entries()) if(b.has(id)) out.set(id, sa + (b.get(id)||0)); return out; }
+function highlightFuzzy(text, queryTokens, fuzzyDistSetting) {
+  if (queryTokens.length === 0) return escapeHtml(text);
+  const th = thresholdFor(fuzzyDistSetting);
+  
+  const withPairs = markHyphenPairs(text, (joined) => {
+    for (const q of queryTokens) 
+      if (tokenDistance(q, joined) <= th) return true;
+    return false;
+  });
+  
+  const tokenRx = /[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß\-]+/gi;
+  return highlightOutsideMarks(escapeHtml(withPairs), (frag) => {
+    return frag.replace(tokenRx, (m) => {
+      let best = Infinity;
+      for (const q of queryTokens) {
+        const d = tokenDistance(q, m.toLowerCase());
+        if (d < best) best = d;
+        if (best === 0) break;
+      }
+      return best <= th ? '<mark>' + m + '</mark>' : m;
+    });
+  });
+}
 
-// =============== Rendering & pagination ===============
-function updateResults(results, from=0, to=0, total=0){
-  const container=document.getElementById('search-results');
-  if(!container) return;
-  if(!results || !results.length){ container.innerHTML='<p>Ingen treff</p>'; return; }
+// =============== Rendering ===============
+function updateResults(results, from = 0, to = 0, total = 0){
+  const container = document.getElementById('search-results');
+  if (!container) return;
+  if (!results || !results.length) { 
+    container.innerHTML = '<p>Ingen treff</p>'; 
+    return; 
+  }
 
   const query = results[0]?.query || '';
   const queryTokens = tokenizeCanonical(query);
@@ -508,20 +513,15 @@ function updateResults(results, from=0, to=0, total=0){
   const html = `
     <p class="result-count">Viser ${from}–${to} av ${total} treff</p>
     <div class="result-list">
-      ${results.map(r=>{
+      ${results.map(r => {
         const bestDate = r.date_rn_text?.trim() || r.date_dn_text?.trim() || formatDateRange(r.date_start, r.date_end);
         const archaic = dnToArchaic(r.DN_ref);
         const stedBest = r.normalized_name || r.sted_dn || r.sted_rn || 'Ukjent sted';
         
-        // Use fuzzy or exact highlighting based on mode
         const regestPreview = r.regest?.trim() ? 
-          (searchMode === 'fuzzy' ? 
-            snippet(highlightFuzzy(r.regest, queryTokens, fuzzyDistance), 220, true) : 
-            snippet(highlightExact(r.regest, query), 220, true)) : 
+          snippet(searchMode === 'fuzzy' ? highlightFuzzy(r.regest, queryTokens, fuzzyDistance) : highlightExact(r.regest, query), 220, true) : 
           (r.sammendrag_raw ? 
-            (searchMode === 'fuzzy' ? 
-              snippet(highlightFuzzy(r.sammendrag_raw, queryTokens, fuzzyDistance), 220, true) : 
-              snippet(highlightExact(r.sammendrag_raw, query), 220, true)) : '');
+            snippet(searchMode === 'fuzzy' ? highlightFuzzy(r.sammendrag_raw, queryTokens, fuzzyDistance) : highlightExact(r.sammendrag_raw, query), 220, true) : '');
         
         return `
         <div class="search-result" data-id="${r.id}">
@@ -541,10 +541,6 @@ function updateResults(results, from=0, to=0, total=0){
               <strong>RN_sted:</strong> ${escapeHtml(r.sted_rn || '—')}
               &nbsp;&nbsp;<strong>DN_sted:</strong> ${escapeHtml(r.sted_dn || '—')}
               &nbsp;&nbsp;<strong>Normalisert:</strong> ${escapeHtml(r.normalized_name || '—')}
-            </p>
-            <p>
-              <strong>date_start:</strong> ${escapeHtml(r.date_start || '')}
-              &nbsp;&nbsp;<strong>date_end:</strong> ${escapeHtml(r.date_end || '')}
             </p>
             ${section('Regest', r.regest, queryTokens, query)}
             ${section('Sammendrag', r.sammendrag_raw, queryTokens, query)}
@@ -568,38 +564,59 @@ function section(label, content, queryTokens, query) {
 }
 
 function renderPagination(total){
-  const bar=document.getElementById('results-pagination'); if(!bar) return;
-  if(!total){ bar.style.display='none'; bar.innerHTML=''; return; }
-  const totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE)); bar.style.display='flex';
-  const nums=paginationWindow(currentPage,totalPages,2);
-  const btn=(label,page,disabled=false,cls='')=>`<button class="page-btn ${cls}" data-page="${page}"${disabled?' disabled':''}>${label}</button>`;
-  const numsHtml = nums.map(n => (n==='…') ? `<span class="ellipsis">…</span>` :
-    `<button class="page-num${n===currentPage?' active':''}" data-page="${n}">${n}</button>`).join('');
+  const bar = document.getElementById('results-pagination'); 
+  if (!bar) return;
+  if (!total) { 
+    bar.style.display = 'none'; 
+    bar.innerHTML = ''; 
+    return; 
+  }
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE)); 
+  bar.style.display = 'flex';
+  const nums = paginationWindow(currentPage, totalPages, 2);
+  const btn = (label, page, disabled = false, cls = '') => `<button class="page-btn ${cls}" data-page="${page}"${disabled ? ' disabled' : ''}>${label}</button>`;
+  const numsHtml = nums.map(n => (n === '…') ? `<span class="ellipsis">…</span>` :
+    `<button class="page-num${n === currentPage ? ' active' : ''}" data-page="${n}">${n}</button>`).join('');
   bar.innerHTML = [
-    btn('« Første',1,currentPage===1,'first'),
-    btn('‹ Forrige',Math.max(1,currentPage-1),currentPage===1,'prev'),
+    btn('« Første', 1, currentPage === 1, 'first'),
+    btn('‹ Forrige', Math.max(1, currentPage - 1), currentPage === 1, 'prev'),
     numsHtml,
-    btn('Neste ›',Math.min(totalPages,currentPage+1),currentPage===totalPages,'next'),
-    btn('Siste »',totalPages,currentPage===totalPages,'last')
+    btn('Neste ›', Math.min(totalPages, currentPage + 1), currentPage === totalPages, 'next'),
+    btn('Siste »', totalPages, currentPage === totalPages, 'last')
   ].join('');
 }
 
-function paginationWindow(curr,total,spread=2){
-  const out=[]; const add=x=>{ if(!out.includes(x)) out.push(x); };
-  add(1); for(let i=curr-spread;i<=curr+spread;i++) if(i>1 && i<total) add(i); if(total>1) add(total);
-  out.sort((a,b)=>a-b);
-  const withDots=[]; for(let i=0;i<out.length;i++){ withDots.push(out[i]); if(i<out.length-1 && out[i+1]-out[i]>1) withDots.push('…'); }
+function paginationWindow(curr, total, spread = 2){
+  const out = []; 
+  const add = x => { if (!out.includes(x)) out.push(x); };
+  add(1); 
+  for (let i = curr - spread; i <= curr + spread; i++) if (i > 1 && i < total) add(i); 
+  if (total > 1) add(total);
+  out.sort((a, b) => a - b);
+  const withDots = []; 
+  for (let i = 0; i < out.length; i++) { 
+    withDots.push(out[i]); 
+    if (i < out.length - 1 && out[i + 1] - out[i] > 1) withDots.push('…'); 
+  }
   return withDots;
 }
 
 // =============== Event wiring ===============
 function wireListeners(){
-  const input=document.getElementById('search-input');
-  const button=document.getElementById('search-btn');
-  const debounced=()=>{ clearTimeout(debounceTimer); debounceTimer=setTimeout(performSearch,200); };
-  if(input){ input.addEventListener('input',debounced); input.addEventListener('keydown',e=>{ if(e.key==='Enter') performSearch(); }); }
-  if(button) button.addEventListener('click', performSearch);
-  document.querySelectorAll('.search-filters input').forEach(cb=>cb.addEventListener('change', performSearch));
+  const input = document.getElementById('search-input');
+  const button = document.getElementById('search-btn');
+  const debounced = () => { 
+    clearTimeout(debounceTimer); 
+    debounceTimer = setTimeout(performSearch, 200); 
+  };
+  
+  if (input) { 
+    input.addEventListener('input', debounced); 
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') performSearch(); }); 
+  }
+  if (button) button.addEventListener('click', performSearch);
+  
+  document.querySelectorAll('.search-filters input').forEach(cb => cb.addEventListener('change', performSearch));
 
   // Search mode controls
   const modeSelect = document.getElementById('search-mode');
@@ -627,33 +644,50 @@ function wireListeners(){
   }
 
   // Date fields
-  const df=document.getElementById('date-from');
-  const dt=document.getElementById('date-to');
-  const ex=document.getElementById('date-exact');
-  const rs=document.getElementById('date-reset');
+  const df = document.getElementById('date-from');
+  const dt = document.getElementById('date-to');
+  const ex = document.getElementById('date-exact');
+  const rs = document.getElementById('date-reset');
 
-  const debounceDates=()=>{ clearTimeout(debounceTimer); debounceTimer=setTimeout(performSearch,150); };
+  const debounceDates = () => { 
+    clearTimeout(debounceTimer); 
+    debounceTimer = setTimeout(performSearch, 150); 
+  };
 
-  if(df) df.addEventListener('input', debounceDates);
-  if(dt) dt.addEventListener('input', debounceDates);
-  if(ex) ex.addEventListener('change', () => {
-    if(ex.checked){ if(dt){ dt.value=''; dt.disabled=true; } }
-    else { if(dt){ dt.disabled=false; } }
+  if (df) df.addEventListener('input', debounceDates);
+  if (dt) dt.addEventListener('input', debounceDates);
+  if (ex) ex.addEventListener('change', () => {
+    if (ex.checked) { 
+      if (dt) { 
+        dt.value = ''; 
+        dt.disabled = true; 
+      } 
+    } else { 
+      if (dt) dt.disabled = false; 
+    }
     performSearch();
   });
-  if(rs) rs.addEventListener('click', () => {
-    if(df) df.value=''; if(dt){ dt.value=''; dt.disabled=false; } if(ex) ex.checked=false; performSearch();
+  if (rs) rs.addEventListener('click', () => {
+    if (df) df.value = ''; 
+    if (dt) { 
+      dt.value = ''; 
+      dt.disabled = false; 
+    } 
+    if (ex) ex.checked = false; 
+    performSearch();
   });
 }
 
 function wireResultsList(){
-  const container=document.getElementById('search-results');
-  if(!container) return;
-  container.addEventListener('click',(ev)=>{
-    const toggle=ev.target.closest('.toggle-details'); if(!toggle) return;
-    const item=ev.target.closest('.search-result'); const details=item.querySelector('.details');
-    const show = details.style.display==='none' || !details.style.display;
-    details.style.display = show ? 'block':'none';
+  const container = document.getElementById('search-results');
+  if (!container) return;
+  container.addEventListener('click', (ev) => {
+    const toggle = ev.target.closest('.toggle-details'); 
+    if (!toggle) return;
+    const item = ev.target.closest('.search-result'); 
+    const details = item.querySelector('.details');
+    const show = details.style.display === 'none' || !details.style.display;
+    details.style.display = show ? 'block' : 'none';
     toggle.textContent = show ? 'Skjul fulltekst' : 'Vis fulltekst';
     toggle.setAttribute('aria-expanded', String(show));
     ev.preventDefault();
@@ -661,87 +695,164 @@ function wireResultsList(){
 }
 
 function wirePagination(){
-  const bar=document.getElementById('results-pagination'); if(!bar) return;
-  bar.addEventListener('click',(ev)=>{
-    const btn=ev.target.closest('[data-page]'); if(!btn) return;
-    const page=Number(btn.getAttribute('data-page')); if(!Number.isFinite(page)) return;
-    currentPage=page; renderPage();
-    document.querySelector('.search-container')?.scrollIntoView({ behavior:'smooth', block:'start' });
+  const bar = document.getElementById('results-pagination'); 
+  if (!bar) return;
+  bar.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('[data-page]'); 
+    if (!btn) return;
+    const page = Number(btn.getAttribute('data-page')); 
+    if (!Number.isFinite(page)) return;
+    currentPage = page; 
+    renderPage();
+    document.querySelector('.search-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 }
 
-// =============== Export (CSV/TXT) ===============
+// =============== Export ===============
 function wireExportBar(){
-  const bar=document.getElementById('export-bar'); if(!bar) return;
-  document.getElementById('export-csv').addEventListener('click',()=>{ if(!currentResultsAll.length) return; const csv=toCSV_fromRaw(currentResultsAll); downloadText(csv,'sok-treff.csv',{addBOM:true}); });
-  document.getElementById('export-txt').addEventListener('click',()=>{ if(!currentResultsAll.length) return; const txt=toTXT_likeDetails(currentResultsAll); downloadText(txt,'sok-treff.txt'); });
+  const bar = document.getElementById('export-bar'); 
+  if (!bar) return;
+  document.getElementById('export-csv')?.addEventListener('click', () => { 
+    if (!currentResultsAll.length) return; 
+    const csv = toCSV_fromRaw(currentResultsAll); 
+    downloadText(csv, 'sok-treff.csv', {addBOM: true}); 
+  });
+  document.getElementById('export-txt')?.addEventListener('click', () => { 
+    if (!currentResultsAll.length) return; 
+    const txt = toTXT_likeDetails(currentResultsAll); 
+    downloadText(txt, 'sok-treff.txt'); 
+  });
 }
-function setExportEnabled(on){ const bar=document.getElementById('export-bar'); if(!bar) return; bar.style.display='flex'; document.getElementById('export-csv').disabled=!on; document.getElementById('export-txt').disabled=!on; }
+
+function setExportEnabled(on){ 
+  const bar = document.getElementById('export-bar'); 
+  if (!bar) return; 
+  bar.style.display = 'flex'; 
+  const csvBtn = document.getElementById('export-csv');
+  const txtBtn = document.getElementById('export-txt');
+  if (csvBtn) csvBtn.disabled = !on; 
+  if (txtBtn) txtBtn.disabled = !on; 
+}
 
 function toTXT_likeDetails(rows){
-  const parts=[]; for(const r of rows){
-    const headL=r.DN_ref||r.RN_ref||'Uten referanse'; const headR=dnToArchaic(r.DN_ref)||'';
-    const dateLine = (r.date_rn_text?.trim() || r.date_dn_text?.trim() || formatDateRange(r.date_start,r.date_end));
+  const parts = []; 
+  for (const r of rows) {
+    const headL = r.DN_ref || r.RN_ref || 'Uten referanse'; 
+    const headR = dnToArchaic(r.DN_ref) || '';
+    const dateLine = (r.date_rn_text?.trim() || r.date_dn_text?.trim() || formatDateRange(r.date_start, r.date_end));
     const placeBits = [
       r.sted_rn ? `RN_sted: ${r.sted_rn}` : null,
       r.sted_dn ? `DN_sted: ${r.sted_dn}` : null,
       r.normalized_name ? `Normalisert: ${r.normalized_name}` : null
     ].filter(Boolean).join(' | ');
-    const bits=[
+    const bits = [
       `${headL}    ${headR}`,
       `${dateLine}${placeBits ? ' – ' + placeBits : ''}`,
-      `Regest dato: ${r.date_rn_text||'—'}    Diplomatarium dato: ${r.date_dn_text||'—'}`,
-      `date_start: ${r.date_start||''}    date_end: ${r.date_end||''}`
+      `Regest dato: ${r.date_rn_text || '—'}    Diplomatarium dato: ${r.date_dn_text || '—'}`,
+      `date_start: ${r.date_start || ''}    date_end: ${r.date_end || ''}`
     ];
-    if(r.regest         ?.trim()) bits.push('','REGEST:',      r.regest);
-    if(r.sammendrag_raw ?.trim()) bits.push('','SAMMENDRAG:',  r.sammendrag_raw);
-    if(r.brevtekst      ?.trim()) bits.push('','BREVTEKST:',   r.brevtekst);
-    if(r.kilde          ?.trim()) bits.push('','KILDE (DN/RN):', r.kilde);
-    if(r.fotnoter       ?.trim()) bits.push('','FOTNOTER:',    r.fotnoter);
-    if(r.tillegg        ?.trim()) bits.push('','TILLEGG:',     r.tillegg);
+    if (r.regest?.trim()) bits.push('', 'REGEST:', r.regest);
+    if (r.sammendrag_raw?.trim()) bits.push('', 'SAMMENDRAG:', r.sammendrag_raw);
+    if (r.brevtekst?.trim()) bits.push('', 'BREVTEKST:', r.brevtekst);
+    if (r.kilde?.trim()) bits.push('', 'KILDE (DN/RN):', r.kilde);
+    if (r.fotnoter?.trim()) bits.push('', 'FOTNOTER:', r.fotnoter);
+    if (r.tillegg?.trim()) bits.push('', 'TILLEGG:', r.tillegg);
     parts.push(bits.join('\n'));
-  } return parts.join('\n\n---\n\n');
+  } 
+  return parts.join('\n\n---\n\n');
 }
 
 function toCSV_fromRaw(rows){
-  const keySet=new Set(); for(const r of rows){ const raw=r._raw||{}; for(const k of Object.keys(raw)) keySet.add(k); }
-  const preferred=[
-    '\ufeffSDNID','SDNID','SDN_ID',
-    'DN_REF','DN_ref','RN_REF','RN_ref',
-    'sammendrag','regest',
-    'DN_source','RN_source',
-    'DN_dato','RN_dato',
-    'DN_sted','RN_sted','Normalized_name',
-    'brevtekst','fotnoter_DN','fotnoter_N','Tillegg',
-    'date_start','date_end','lat','lon','uncertain_loc'
+  const keySet = new Set(); 
+  for (const r of rows) { 
+    const raw = r._raw || {}; 
+    for (const k of Object.keys(raw)) keySet.add(k); 
+  }
+  const preferred = [
+    '\ufeffSDNID', 'SDNID', 'SDN_ID',
+    'DN_REF', 'DN_ref', 'RN_REF', 'RN_ref',
+    'sammendrag', 'regest',
+    'DN_source', 'RN_source',
+    'DN_dato', 'RN_dato',
+    'DN_sted', 'RN_sted', 'Normalized_name',
+    'brevtekst', 'fotnoter_DN', 'fotnoter_N', 'Tillegg',
+    'date_start', 'date_end', 'lat', 'lon', 'uncertain_loc'
   ];
-  const presentPreferred=preferred.filter(k=>keySet.has(k));
-  const remaining=Array.from(keySet).filter(k=>!presentPreferred.includes(k)).sort();
-  const headers=[...presentPreferred,...remaining];
-  const esc=v=>`"${String(v??'').replace(/\r?\n/g,'\n').replace(/"/g,'""')}"`;
-  const lines=[headers.join(',')];
-  for(const r of rows){ const raw=r._raw||{}; lines.push(headers.map(h=>esc(raw[h])).join(',')); }
+  const presentPreferred = preferred.filter(k => keySet.has(k));
+  const remaining = Array.from(keySet).filter(k => !presentPreferred.includes(k)).sort();
+  const headers = [...presentPreferred, ...remaining];
+  const esc = v => `"${String(v ?? '').replace(/\r?\n/g, '\n').replace(/"/g, '""')}"`;
+  const lines = [headers.join(',')];
+  for (const r of rows) { 
+    const raw = r._raw || {}; 
+    lines.push(headers.map(h => esc(raw[h])).join(',')); 
+  }
   return lines.join('\r\n');
 }
 
 // =============== Utilities ===============
-function formatDateRange(start,end){
-  const ys=parseYear(start); const ye=(parseYear(end) ?? ys);
-  if(ys && ye) return ys===ye?String(ys):`${ys}–${ye}`; if(ys) return String(ys); if(ye) return String(ye); return 'Ukjent';
+function formatDateRange(start, end){
+  const ys = parseYear(start); 
+  const ye = (parseYear(end) ?? ys);
+  if (ys && ye) return ys === ye ? String(ys) : `${ys}–${ye}`; 
+  if (ys) return String(ys); 
+  if (ye) return String(ye); 
+  return 'Ukjent';
 }
-function parseYear(s){ const m=String(s||'').match(/^(\d{4})/); return m?Number(m[1]):null; }
-function escapeHtml(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
-function dnToArchaic(dn){ if(!dn) return ''; const m=String(dn).match(/^DN(\d{3})(\d{5})$/i); if(!m) return ''; const vol=parseInt(m[1],10), num=parseInt(m[2],10); return `Diplomatarium Norvegicum ${toRoman(vol)}, ${num}`; }
-function toRoman(num){ if(!Number.isFinite(num)||num<=0) return ''; const map=[[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']]; let out=''; for(const [v,s] of map){ while(num>=v){ out+=s; num-=v; } } return out; }
-function downloadText(text,filename,opts={}){ const parts=[]; if(opts.addBOM) parts.push('\uFEFF'); parts.push(text); const blob=new Blob(parts,{type:'text/plain;charset=utf-8'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); },0); }
-function snippet(t, n, isHtml=false){ 
+
+function parseYear(s){ 
+  const m = String(s || '').match(/^(\d{4})/); 
+  return m ? Number(m[1]) : null; 
+}
+
+function escapeHtml(s){ 
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); 
+}
+
+function dnToArchaic(dn){ 
+  if (!dn) return ''; 
+  const m = String(dn).match(/^DN(\d{3})(\d{5})$/i); 
+  if (!m) return ''; 
+  const vol = parseInt(m[1], 10), num = parseInt(m[2], 10); 
+  return `Diplomatarium Norvegicum ${toRoman(vol)}, ${num}`; 
+}
+
+function toRoman(num){ 
+  if (!Number.isFinite(num) || num <= 0) return ''; 
+  const map = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]; 
+  let out = ''; 
+  for (const [v, s] of map) { 
+    while (num >= v) { 
+      out += s; 
+      num -= v; 
+    } 
+  } 
+  return out; 
+}
+
+function downloadText(text, filename, opts = {}){ 
+  const parts = []; 
+  if (opts.addBOM) parts.push('\uFEFF'); 
+  parts.push(text); 
+  const blob = new Blob(parts, {type: 'text/plain;charset=utf-8'}); 
+  const url = URL.createObjectURL(blob); 
+  const a = document.createElement('a'); 
+  a.href = url; 
+  a.download = filename; 
+  document.body.appendChild(a); 
+  a.click(); 
+  setTimeout(() => { 
+    document.body.removeChild(a); 
+    URL.revokeObjectURL(url); 
+  }, 0); 
+}
+
+function snippet(t, n, isHtml = false){ 
   if (isHtml) {
-    // For HTML content, strip tags first to count actual characters
     const temp = document.createElement('div');
     temp.innerHTML = t;
     const text = temp.textContent || temp.innerText || '';
     if (text.length <= n) return t;
-    // Find a good break point in the original HTML
     let charCount = 0;
     const parts = t.split(/(<[^>]+>)/);
     let result = '';
@@ -761,7 +872,7 @@ function snippet(t, n, isHtml=false){
     }
     return result + '…';
   }
-  const s=String(t||'').trim(); 
-  if(!s) return ''; 
-  return s.length<=n ? s : s.slice(0,n).replace(/\s+\S*$/,'') + '…'; 
+  const s = String(t || '').trim(); 
+  if (!s) return ''; 
+  return s.length <= n ? s : s.slice(0, n).replace(/\s+\S*$/, '') + '…'; 
 }

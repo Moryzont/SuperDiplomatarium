@@ -7,55 +7,73 @@ permalink: /sok/
 <div class="search-container">
   <h1>Søk i brevsamlingen</h1>
 
+  <!-- Main search box -->
   <div class="search-box">
     <input type="text" id="search-input" placeholder="Søk i over 25 000 dokumenter" autocomplete="off">
     <button id="search-btn" class="btn btn-primary">Søk</button>
   </div>
 
-  <div class="search-mode-row">
-    <label for="search-mode" class="mode-label">Søkemodus:</label>
-    <select id="search-mode" class="mode-select">
-      <option value="fuzzy">Uskarpt søk (fuzzy)</option>
-      <option value="exact">Eksakt søk</option>
-    </select>
-    
-    <div id="fuzzy-controls" class="fuzzy-controls">
-      <label for="fuzzy-distance">Fuzzy-nivå:</label>
-      <input type="range" id="fuzzy-distance" min="0" max="3" value="1" step="1">
-      <span id="fuzzy-label" class="fuzzy-label">Moderat</span>
+  <!-- Compact controls row -->
+  <div class="search-controls-compact">
+    <!-- Left side: Mode and Fuzzy -->
+    <div class="controls-left">
+      <div class="mode-group">
+        <label for="search-mode">Søkemodus:</label>
+        <select id="search-mode" class="mode-select">
+          <option value="fuzzy">Uskarpt (fuzzy)</option>
+          <option value="exact">Eksakt</option>
+        </select>
+      </div>
+      
+      <div id="fuzzy-controls" class="fuzzy-controls">
+        <label for="fuzzy-distance">Fuzzy-nivå:</label>
+        <input type="range" id="fuzzy-distance" min="0" max="3" value="1" step="1" class="fuzzy-slider">
+        <span id="fuzzy-label" class="fuzzy-label">Moderat</span>
+      </div>
+    </div>
+
+    <!-- Right side: Field checkboxes -->
+    <div class="controls-right">
+      <span class="filter-label">Søk i:</span>
+      <div class="field-checkboxes">
+        <label><input type="checkbox" id="search-sammendrag" checked> Sammendrag</label>
+        <label><input type="checkbox" id="search-brevtekst" checked> Brevtekst</label>
+        <label><input type="checkbox" id="search-sted"> Sted</label>
+        <label><input type="checkbox" id="search-kilde"> Kilde</label>
+      </div>
     </div>
   </div>
 
-  <div class="search-filters">
-    <label><input type="checkbox" id="search-sammendrag" checked> Sammendrag</label>
-    <label><input type="checkbox" id="search-brevtekst" checked> Brevtekst</label>
-    <label><input type="checkbox" id="search-sted"> Sted</label>
-    <label><input type="checkbox" id="search-kilde"> Kilde</label>
+  <!-- Date filtering row -->
+  <div class="date-filter-row">
+    <span class="date-label">Datofilter:</span>
+    <div class="date-inputs">
+      <div class="date-field">
+        <label for="date-from">Fra</label>
+        <input id="date-from" placeholder="YYYY eller YYYY-MM-DD" autocomplete="off">
+      </div>
+      <div class="date-field">
+        <label for="date-to">Til</label>
+        <input id="date-to" placeholder="YYYY eller YYYY-MM-DD" autocomplete="off">
+      </div>
+      <label class="date-exact-check">
+        <input type="checkbox" id="date-exact"> Eksakt dato
+      </label>
+      <button id="date-reset" type="button" class="btn-reset">Nullstill</button>
+    </div>
   </div>
 
-  <div class="date-row">
-    <div class="date-input">
-      <label for="date-from">Fra</label>
-      <input id="date-from" placeholder="YYYY / YYYY-MM / YYYY-MM-DD" inputmode="numeric" autocomplete="off">
-    </div>
-    <div class="date-input">
-      <label for="date-to">Til</label>
-      <input id="date-to" placeholder="YYYY / YYYY-MM / YYYY-MM-DD" inputmode="numeric" autocomplete="off">
-    </div>
-    <label class="chk-inline"><input type="checkbox" id="date-exact"> Eksakt dato</label>
-    <button id="date-reset" type="button" class="btn btn-ghost">Nullstill</button>
-  </div>
-
+  <!-- Export bar -->
   <div id="export-bar" class="export-bar" style="display:none;">
-    <div class="export-left"><strong>Exportér treff:</strong></div>
-    <div class="export-right">
-      <button id="export-txt" class="btn btn-ghost" disabled>Last ned TXT</button>
-      <button id="export-csv" class="btn btn-ghost" disabled>Last ned CSV</button>
+    <span class="export-label">Eksportér treff:</span>
+    <div class="export-buttons">
+      <button id="export-txt" class="btn-export" disabled>TXT</button>
+      <button id="export-csv" class="btn-export" disabled>CSV</button>
     </div>
   </div>
 
-  <div id="search-status"></div>
-
+  <!-- Status and results -->
+  <div id="search-status" class="search-status"></div>
   <div id="search-results"></div>
   <div id="results-pagination" class="pagination" style="display:none;"></div>
 </div>
