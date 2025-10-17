@@ -285,31 +285,40 @@ function normalizeLetter(raw, chunkIndex, rowIndex) {
 
 // =============== Date helpers ===============
 function dateStrToOrd(s, endSide){
-  if(!s) return null; 
+  if (!s) return null;
   const str = String(s).trim();
+  
+  // Full date: YYYY-MM-DD
   let m = str.match(/^(\d{3,4})-(\d{1,2})-(\d{1,2})$/);
-  if(m){ 
-    const y = clampYear(+m[1]); 
-    const mo = clampMonth(+m[2]); 
-    const d = clampDay(y, mo, +m[3]); 
+  if (m) { 
+    const y = clampYear(parseInt(m[1], 10)); 
+    const mo = clampMonth(parseInt(m[2], 10)); 
+    const d = clampDay(y, mo, parseInt(m[3], 10)); 
     return y * 10000 + mo * 100 + d; 
   }
+  
+  // Year-Month: YYYY-MM
   m = str.match(/^(\d{3,4})-(\d{1,2})$/);
-  if(m){ 
-    const y = clampYear(+m[1]); 
-    const mo = clampMonth(+m[2]); 
+  if (m) { 
+    const y = clampYear(parseInt(m[1], 10)); 
+    const mo = clampMonth(parseInt(m[2], 10)); 
     const d = endSide ? daysInMonth(y, mo) : 1; 
     return y * 10000 + mo * 100 + d; 
   }
+  
+  // Year only: YYYY
   m = str.match(/^(\d{3,4})$/);
-  if(m){ 
-    const y = clampYear(+m[1]); 
+  if (m) { 
+    const y = clampYear(parseInt(m[1], 10)); 
     const mo = endSide ? 12 : 1; 
     const d = endSide ? 31 : 1; 
     return y * 10000 + mo * 100 + d; 
   }
+  
+  // Try with dots instead of dashes
   const alt = str.replace(/\./g, '-'); 
-  if(alt !== str) return dateStrToOrd(alt, endSide);
+  if (alt !== str) return dateStrToOrd(alt, endSide);
+  
   return null;
 }
 
@@ -376,6 +385,7 @@ function performSearch() {
   if (!q && hasDateFilter) {
     // Date-only search
     results = allLetters.filter(doc => dateMatches(doc, uiFrom, uiTo));
+    console.log(`Date-only filter: ${results.length} results for range ${uiFrom || '?'} to ${uiTo || '?'}`);
   } else if (searchMode === 'exact') {
     // Exact search
     const miniResults = searchIndex.search(q, { 
@@ -391,6 +401,7 @@ function performSearch() {
       if (hasDateFilter && !dateMatches(doc, uiFrom, uiTo)) return false;
       return true;
     });
+    console.log(`Exact search: ${results.length} results${hasDateFilter ? ' (with date filter)' : ''}`);
   } else {
     // Fuzzy search
     const queryTokens = tokenizeCanonical(q);
@@ -421,6 +432,7 @@ function performSearch() {
       
       return true;
     });
+    console.log(`Fuzzy search (level ${fuzzyDistance}): ${results.length} results${hasDateFilter ? ' (with date filter)' : ''}`);
   }
 
   // Store results with query for highlighting
@@ -431,14 +443,22 @@ function performSearch() {
 }
 
 function dateMatches(doc, fromOrd, toOrd) {
+  // No date filter = match everything
   if (fromOrd == null && toOrd == null) return true;
   
-  const F = fromOrd ?? -Infinity;
-  const T = toOrd ?? Infinity;
-  const S = doc.ORD_START ?? -Infinity;
-  const E = (doc.ORD_END ?? doc.ORD_START) ?? Infinity;
+  // Get document date range
+  const docStart = doc.ORD_START;
+  const docEnd = doc.ORD_END || doc.ORD_START;
   
-  return S <= T && E >= F;
+  // Skip documents without dates
+  if (docStart == null) return false;
+  
+  // Apply filter
+  const filterStart = fromOrd ?? -Infinity;
+  const filterEnd = toOrd ?? Infinity;
+  
+  // Check if document date range overlaps with filter range
+  return docStart <= filterEnd && (docEnd || docStart) >= filterStart;
 }
 
 function renderPage(){
@@ -643,39 +663,66 @@ function wireListeners(){
     });
   }
 
-  // Date fields
+  // Date fields - FIXED for real-time updates
   const df = document.getElementById('date-from');
   const dt = document.getElementById('date-to');
   const ex = document.getElementById('date-exact');
   const rs = document.getElementById('date-reset');
 
+  // Shorter debounce for better real-time feel
   const debounceDates = () => { 
     clearTimeout(debounceTimer); 
-    debounceTimer = setTimeout(performSearch, 150); 
+    debounceTimer = setTimeout(performSearch, 100); 
   };
 
-  if (df) df.addEventListener('input', debounceDates);
-  if (dt) dt.addEventListener('input', debounceDates);
-  if (ex) ex.addEventListener('change', () => {
-    if (ex.checked) { 
+  if (df) {
+    df.addEventListener('input', debounceDates);
+    // Visual feedback
+    df.addEventListener('input', () => {
+      df.style.borderColor = 'var(--c-sand)';
+      setTimeout(() => { df.style.borderColor = 'var(--c-olive)'; }, 300);
+    });
+  }
+  
+  if (dt) {
+    dt.addEventListener('input', debounceDates);
+    // Visual feedback
+    dt.addEventListener('input', () => {
+      dt.style.borderColor = 'var(--c-sand)';
+      setTimeout(() => { dt.style.borderColor = 'var(--c-olive)'; }, 300);
+    });
+  }
+  
+  if (ex) {
+    ex.addEventListener('change', () => {
+      if (ex.checked) { 
+        if (dt) { 
+          dt.value = ''; 
+          dt.disabled = true;
+          dt.style.opacity = '0.5';
+        } 
+      } else { 
+        if (dt) {
+          dt.disabled = false;
+          dt.style.opacity = '1';
+        }
+      }
+      performSearch(); // Immediate
+    });
+  }
+  
+  if (rs) {
+    rs.addEventListener('click', () => {
+      if (df) df.value = ''; 
       if (dt) { 
         dt.value = ''; 
-        dt.disabled = true; 
+        dt.disabled = false;
+        dt.style.opacity = '1';
       } 
-    } else { 
-      if (dt) dt.disabled = false; 
-    }
-    performSearch();
-  });
-  if (rs) rs.addEventListener('click', () => {
-    if (df) df.value = ''; 
-    if (dt) { 
-      dt.value = ''; 
-      dt.disabled = false; 
-    } 
-    if (ex) ex.checked = false; 
-    performSearch();
-  });
+      if (ex) ex.checked = false;
+      performSearch(); // Immediate
+    });
+  }
 }
 
 function wireResultsList(){
