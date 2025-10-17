@@ -1,5 +1,5 @@
 /* ====================================================================
-   SuperDiplomatarium — theme (strict 5-color palette)
+   SuperDiplomatarium – theme (strict 5-color palette)
    Palette:
      --c-dark  = #283618
      --c-olive = #606C38
@@ -182,7 +182,7 @@
     padding:.62rem 1.0rem; border-radius: var(--radius);
     background: var(--c-clay); color: var(--c-light); border:2px solid var(--c-clay);
     font: 600 .98rem/1 "Inter", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
-          Arial, "Noto Sans", "Liberation Sans", sans-serif;
+          Arial, "Nots Sans", "Liberation Sans", sans-serif;
     cursor: pointer; transition: background .15s ease, border-color .15s ease, transform .02s ease;
   }
   button.btn:hover, input[type="submit"].btn:hover {
@@ -762,6 +762,22 @@
   font-size: .95rem;
   line-height: 1.7;
   color: var(--c-dark);
+}
+
+/* CRITICAL FIX: Special handling for brevtekst in <pre> tag to prevent overflow */
+.brevtekst-plain {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  max-width: 100%;
+  overflow-x: auto;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: .95rem;
+  line-height: 1.7;
+  color: var(--c-dark);
+  margin: 0;
+  padding: 0;
 }
 
 /* Highlighted terms */
