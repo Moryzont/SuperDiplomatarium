@@ -1,12 +1,12 @@
 /* global MiniSearch, document, window, fetch */
 
 /**
- * SuperDiplomatarium — OPTIMIZED Enhanced Search
- * Performance improvements:
- * - Pre-computed trigram/bigram indexes for O(1) candidate lookup
- * - Memoized distance calculations
- * - Smart candidate filtering
- * - Progressive search with early termination
+ * SuperDiplomatarium — OPTIMIZED Enhanced Search (fixed)
+ * Key fixes:
+ * - Progressive search: no waiting for full index; falls back gracefully.
+ * - Candidate ID mismatch fixed (string doc.id -> numeric global id).
+ * - Ignore empty/not-yet-loaded index (don’t block results).
+ * - Small robustness tweaks (field fallbacks).
  */
 
 // =============== Globals ===============
@@ -16,6 +16,8 @@ let DOCS = new Map();
 let chunksLoaded = 0;
 let totalChunks = 0;
 let debounceTimer = null;
+
+let CHUNK_SIZE = 1000; // FIX: filled from metadata if available
 
 // NEW: Optimized search indexes
 let SEARCH_INDEX = null;
@@ -77,15 +79,11 @@ function getCachedDistance(a, b) {
   if (DISTANCE_CACHE.has(key)) {
     return DISTANCE_CACHE.get(key);
   }
-  
   const dist = tokenDistance(a, b);
-  
-  // Limit cache size
   if (DISTANCE_CACHE.size > MAX_CACHE_SIZE) {
     const firstKey = DISTANCE_CACHE.keys().next().value;
     DISTANCE_CACHE.delete(firstKey);
   }
-  
   DISTANCE_CACHE.set(key, dist);
   return dist;
 }
@@ -107,41 +105,30 @@ function weightedEdit(a, b, maxCostHint) {
   const m = a.length, n = b.length;
   if (!m) return n;
   if (!n) return m;
-  
-  // Early termination: if length difference is too large
-  if (maxCostHint && Math.abs(m - n) > maxCostHint * 2) {
-    return maxCostHint * 2;
-  }
-  
+  if (maxCostHint && Math.abs(m - n) > maxCostHint * 2) return maxCostHint * 2; // early out
+
   const band = Math.max(2, Math.abs(m - n) + 1);
   let prev = new Array(n + 1), curr = new Array(n + 1);
-  
   for (let j = 0; j <= n; j++) prev[j] = j;
-  
+
   for (let i = 1; i <= m; i++) {
     curr[0] = i;
     let rowMin = curr[0];
     const jStart = Math.max(1, i - band), jEnd = Math.min(n, i + band);
-    
+
     for (let j = 1; j < jStart; j++) curr[j] = Number.POSITIVE_INFINITY;
-    
     for (let j = jStart; j <= jEnd; j++) {
       const costSub = prev[j - 1] + subCost(a[i - 1], b[j - 1]);
       const costIns = curr[j - 1] + 1, costDel = prev[j] + 1;
       let val = Math.min(costSub, costIns, costDel);
-      
       if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
         val = Math.min(val, prev[j - 2] + subCost(a[i - 2], b[j - 2]));
       }
       curr[j] = val;
       if (val < rowMin) rowMin = val;
     }
-    
     for (let j = jEnd + 1; j <= n; j++) curr[j] = Number.POSITIVE_INFINITY;
-    
-    // Early termination if row minimum exceeds threshold
-    if (maxCostHint && rowMin > maxCostHint * 1.6) return rowMin;
-    
+    if (maxCostHint && rowMin > maxCostHint * 1.6) return rowMin; // early out
     const tmp = prev; prev = curr; curr = tmp;
   }
   return prev[n];
@@ -168,22 +155,16 @@ function diceCoeff(a, b) {
 function tokenDistance(qRaw, wRaw) {
   const q = qRaw.toLowerCase(), w = wRaw.toLowerCase();
   if (!q || !w) return 1e9;
-  
-  // Quick exact match
-  if (q === w) return 0;
-  
-  // Quick prefix match
-  if (w.startsWith(q) || q.startsWith(w)) return 0.1;
-  
+  if (q === w) return 0;                           // exact
+  if (w.startsWith(q) || q.startsWith(w)) return 0.1; // fast prefix
+
   const maxPrefix = Math.min(2, Math.min(q.length, w.length));
   let p = 0;
-  for (let i = 0; i < maxPrefix; i++) 
-    if (q[i] !== w[i]) p += 0.35;
-  
+  for (let i = 0; i < maxPrefix; i++) if (q[i] !== w[i]) p += 0.35;
+
   const maxLen = Math.max(q.length, w.length);
   const we = weightedEdit(q, w, Math.ceil(maxLen * 0.5)) / maxLen;
   const dice = 1 - diceCoeff(bigramsOf(q), bigramsOf(w));
-  
   return 0.7 * (we + p) + 0.3 * dice;
 }
 
@@ -192,10 +173,34 @@ function thresholdFor(dist) {
   return [0.28, 0.34, 0.42, 0.50][d];
 }
 
+// =============== Candidate handling ===============
+
+// FIX: treat index as "not ready" if missing or empty
+function indexIsReady() {
+  if (!SEARCH_INDEX) return false;
+  const t = SEARCH_INDEX.tokens || {};
+  const g = SEARCH_INDEX.trigrams || {};
+  return (Object.keys(t).length + Object.keys(g).length) > 0;
+}
+
+// FIX: turn "DNxxx#chunk:row" into a numeric global id = chunk*CHUNK_SIZE + row
+function numericIdFromDoc(docOrId) {
+  const id = typeof docOrId === 'string' ? docOrId : docOrId.id;
+  const hash = (id || '').split('#')[1] || '';
+  const [chunkStr, rowStr] = hash.split(':');
+  const chunk = parseInt(chunkStr, 10);
+  const row   = parseInt(rowStr, 10);
+  if (Number.isFinite(chunk) && Number.isFinite(row)) {
+    return chunk * CHUNK_SIZE + row;
+  }
+  return null;
+}
+
 // NEW: Fast candidate filtering using pre-computed indexes
 function getCandidatesFromIndexes(query, maxCandidates = 3000) {
-  if (!SEARCH_INDEX) return new Set();
-  
+  // FIX: if index not ready, skip candidate filtering (return null, not empty set)
+  if (!indexIsReady()) return null;
+
   const candidates = new Set();
   const queryTokens = tokenizeCanonical(query);
   
@@ -205,7 +210,6 @@ function getCandidatesFromIndexes(query, maxCandidates = 3000) {
     if (SEARCH_INDEX.tokens[tokenLower]) {
       SEARCH_INDEX.tokens[tokenLower].forEach(id => candidates.add(id));
     }
-    
     // Try prefixes
     for (let i = Math.min(token.length, 5); i >= 3; i--) {
       const prefix = tokenLower.slice(0, i);
@@ -213,11 +217,10 @@ function getCandidatesFromIndexes(query, maxCandidates = 3000) {
         SEARCH_INDEX.tokens[prefix].forEach(id => candidates.add(id));
       }
     }
-    
     if (candidates.size > maxCandidates) break;
   }
   
-  // If we have enough candidates, return early
+  // If we have enough candidates, return them
   if (candidates.size >= 100) {
     return candidates;
   }
@@ -227,10 +230,9 @@ function getCandidatesFromIndexes(query, maxCandidates = 3000) {
   const trigramCandidates = new Map(); // doc_id -> match_count
   
   queryTrigrams.forEach(tri => {
-    if (SEARCH_INDEX.trigrams[tri]) {
-      SEARCH_INDEX.trigrams[tri].forEach(id => {
-        trigramCandidates.set(id, (trigramCandidates.get(id) || 0) + 1);
-      });
+    const bucket = SEARCH_INDEX.trigrams[tri];
+    if (bucket) {
+      bucket.forEach(id => trigramCandidates.set(id, (trigramCandidates.get(id) || 0) + 1));
     }
   });
   
@@ -238,59 +240,47 @@ function getCandidatesFromIndexes(query, maxCandidates = 3000) {
   const sorted = Array.from(trigramCandidates.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, maxCandidates);
-  
   sorted.forEach(([id]) => candidates.add(id));
-  
-  return candidates;
+
+  // FIX: if still empty, treat as "no candidates filter"
+  return candidates.size ? candidates : null;
 }
 
 // Check if document matches fuzzy search (now with candidate pre-filtering)
 function docMatchesFuzzy(doc, queryTokens, fields, threshold, candidates = null) {
   if (queryTokens.length === 0) return true;
-  
-  // If we have candidates and this doc isn't in them, skip early
-  if (candidates && !candidates.has(doc.id)) return false;
+
+  // FIX: candidate membership uses numeric global id; only apply if candidates is non-null
+  if (candidates) {
+    const nid = numericIdFromDoc(doc);
+    if (nid == null || !candidates.has(nid)) return false;
+  }
   
   for (const field of fields) {
     const text = normalizeForScoring(doc[field] || '');
     const docTokens = tokenizeCanonical(text);
-    
     let allMatch = true;
+
     for (const qToken of queryTokens) {
       let foundMatch = false;
-      
+
       // Check hyphenated combinations
       for (let i = 0; i < docTokens.length - 1; i++) {
         const combined = docTokens[i] + docTokens[i + 1];
-        if (getCachedDistance(qToken, combined) <= threshold) {
-          foundMatch = true;
-          break;
-        }
+        if (getCachedDistance(qToken, combined) <= threshold) { foundMatch = true; break; }
       }
-      
       if (!foundMatch) {
         // Check individual tokens with early termination
         for (const dToken of docTokens) {
-          // Quick length check before expensive distance calculation
           const lenDiff = Math.abs(qToken.length - dToken.length);
           if (lenDiff > qToken.length * 0.5) continue;
-          
-          if (getCachedDistance(qToken, dToken) <= threshold) {
-            foundMatch = true;
-            break;
-          }
+          if (getCachedDistance(qToken, dToken) <= threshold) { foundMatch = true; break; }
         }
       }
-      
-      if (!foundMatch) {
-        allMatch = false;
-        break;
-      }
+      if (!foundMatch) { allMatch = false; break; }
     }
-    
     if (allMatch) return true;
   }
-  
   return false;
 }
 
@@ -303,8 +293,9 @@ async function initializeSearch() {
     if (!metaResponse.ok) throw new Error(`HTTP ${metaResponse.status} on ${metaUrl}`);
     const metadata = await metaResponse.json();
     totalChunks = metadata.chunks;
+    CHUNK_SIZE = Number(metadata.chunk_size) || CHUNK_SIZE; // FIX: remember for numeric IDs
 
-    // Load the optimized search index first (now chunked)
+    // Load the optimized search index first (chunked, if present)
     if (metadata.has_search_index && metadata.index_metadata) {
       updateStatus('Laster søkeindeks…');
       try {
@@ -317,8 +308,12 @@ async function initializeSearch() {
       } catch (err) {
         console.warn('Could not load search index, falling back to standard search:', err);
       }
+    } else {
+      // FIX: If no index metadata at all, keep SEARCH_INDEX = null so we skip candidate filtering
+      SEARCH_INDEX = null;
     }
 
+    // Create MiniSearch and load first chunk
     searchIndex = new MiniSearch({
       idField: 'id',
       fields: ['sammendrag', 'brevtekst', 'sted_all', 'kilde'],
@@ -336,7 +331,11 @@ async function initializeSearch() {
       }
     });
 
-    await loadChunk(0);
+    await loadChunk(0);               // load first chunk
+    updateStatus(`Lastet 1 av ${totalChunks} deler…`);
+    setTimeout(() => performSearch(), 0); // FIX: enable immediate search on the first chunk
+
+    // Load the rest in the background
     loadRemainingChunks();
   } catch (err) {
     console.error('Feil ved initialisering:', err);
@@ -351,35 +350,22 @@ async function loadChunkedIndexes(indexMetadata) {
     tokens: {},
     total_docs: indexMetadata.total_docs
   };
-  
-  // Load all trigram chunks
+
+  // We fetch sequentially to be kind to static hosting; could be parallel if desired.
   for (let i = 0; i < indexMetadata.trigram_chunks; i++) {
     const url = `${BASE()}/data/indexes/trigrams-${String(i).padStart(2, '0')}.json`;
     const res = await fetch(url);
-    if (res.ok) {
-      const chunk = await res.json();
-      Object.assign(SEARCH_INDEX.trigrams, chunk);
-    }
+    if (res.ok) Object.assign(SEARCH_INDEX.trigrams, await res.json());
   }
-  
-  // Load all token chunks
   for (let i = 0; i < indexMetadata.token_chunks; i++) {
     const url = `${BASE()}/data/indexes/tokens-${String(i).padStart(2, '0')}.json`;
     const res = await fetch(url);
-    if (res.ok) {
-      const chunk = await res.json();
-      Object.assign(SEARCH_INDEX.tokens, chunk);
-    }
+    if (res.ok) Object.assign(SEARCH_INDEX.tokens, await res.json());
   }
-  
-  // Load bigram chunks
   for (let i = 0; i < indexMetadata.bigram_chunks; i++) {
     const url = `${BASE()}/data/indexes/bigrams-${String(i).padStart(2, '0')}.json`;
     const res = await fetch(url);
-    if (res.ok) {
-      const chunk = await res.json();
-      Object.assign(SEARCH_INDEX.bigrams, chunk);
-    }
+    if (res.ok) Object.assign(SEARCH_INDEX.bigrams, await res.json());
   }
 }
 
@@ -400,15 +386,23 @@ async function loadChunk(i) {
 
 async function loadRemainingChunks() {
   for (let i = 1; i < totalChunks; i++) {
-    try { await loadChunk(i); } catch (e) { console.error(`Del ${i} feilet:`, e); }
+    try { 
+      await loadChunk(i);
+      // Optional: live re-run current query as more data arrives, throttled
+      if (i % 2 === 0) performSearch();
+    } catch (e) { 
+      console.error(`Del ${i} feilet:`, e); 
+    }
   }
   updateStatus(`${allLetters.length} brev lastet og klare for søk!`);
 }
 
+// =============== Normalization ===============
 function normalizeLetter(raw, chunkIndex, rowIndex) {
-  const sdn = raw.SDN_ID || raw.SDNID || raw['\ufeffSDNID'] || raw['ï»¿SDNID'] || null;
-  const dn  = raw.DN_REF || raw.DN_ref || raw.DNREF || null;
-  const rn  = raw.RN_REF || raw.RN_ref || null;
+  // FIX: include SD_ID as a fallback for SDN_ID
+  const sdn  = raw.SDN_ID || raw.SDNID || raw['\ufeffSDNID'] || raw['ï»¿SDNID'] || raw.SD_ID || null;
+  const dn   = raw.DN_REF || raw.DN_ref || raw.DNREF || null;
+  const rn   = raw.RN_REF || raw.RN_ref || null;
 
   const regest           = raw.regest || '';
   const sammendrag_raw   = raw.sammendrag || '';
@@ -429,7 +423,8 @@ function normalizeLetter(raw, chunkIndex, rowIndex) {
   const normalized_name = raw.Normalized_name || raw.normalized_name || '';
   const sted_all = [sted_dn, sted_rn, normalized_name].filter(Boolean).join(' | ');
 
-  const fotnoterCombined = [raw.fotnoter_DN, raw.fotnoter_N].filter(Boolean).join('\n');
+  // FIX: include fotnoter_RN as well
+  const fotnoterCombined = [raw.fotnoter_DN, raw.fotnoter_RN, raw.fotnoter_N].filter(Boolean).join('\n');
   const tillegg = raw.Tillegg || raw.tillegg || '';
 
   const id = `${(dn || sdn || rn || 'doc')}#${chunkIndex}:${rowIndex}`;
@@ -561,7 +556,6 @@ function performSearch() {
       fuzzy: false,
       prefix: false
     });
-    
     const resultIds = new Set(miniResults.map(r => r.id));
     results = allLetters.filter(doc => {
       if (!resultIds.has(doc.id)) return false;
@@ -574,17 +568,22 @@ function performSearch() {
     const queryTokens = tokenizeCanonical(q);
     const threshold = thresholdFor(fuzzyDistance);
     
-    // Use pre-computed indexes to get candidates
-    const candidates = SEARCH_INDEX ? getCandidatesFromIndexes(q, 3000) : null;
-    
-    if (candidates) {
-      console.log(`Index returned ${candidates.size} candidates`);
-    }
-    
+    // Use pre-computed indexes to get candidates (or null if index not ready/empty)
+    const candidates = getCandidatesFromIndexes(q, 3000);
+    if (candidates) console.log(`Index returned ${candidates.size} candidates`);
+
     // Filter candidates (or all docs if no index)
-    const docsToCheck = candidates ? 
-      allLetters.filter(d => candidates.has(parseInt(d.id.split('#')[1].split(':')[0]) * 1000 + parseInt(d.id.split(':')[1]))) :
-      allLetters;
+    let docsToCheck;
+    if (candidates) {
+      // FIX: map doc string IDs to numeric global ids using CHUNK_SIZE
+      const candSet = candidates;
+      docsToCheck = allLetters.filter(d => {
+        const nid = numericIdFromDoc(d);
+        return nid != null && candSet.has(nid);
+      });
+    } else {
+      docsToCheck = allLetters;
+    }
     
     results = docsToCheck.filter(doc => {
       if (!docMatchesFuzzy(doc, queryTokens, selectedFields, threshold, candidates)) return false;
@@ -593,7 +592,7 @@ function performSearch() {
     });
     
     const elapsed = (performance.now() - startTime).toFixed(1);
-    console.log(`Fuzzy (level ${fuzzyDistance}): ${results.length} results in ${elapsed}ms${candidates ? ` (from ${candidates.size} candidates)` : ''}`);
+    console.log(`Fuzzy (level ${fuzzyDistance}): ${results.length} results in ${elapsed}ms${candidates ? ` (from ${docsToCheck.length} candidates)` : ''}`);
   }
 
   currentResultsAll = results.map(r => Object.assign({}, r, { query: q }));
@@ -609,15 +608,11 @@ function performSearch() {
 
 function dateMatches(doc, fromOrd, toOrd) {
   if (fromOrd == null && toOrd == null) return true;
-  
   const docStart = doc.ORD_START;
   const docEnd = doc.ORD_END || doc.ORD_START;
-  
   if (docStart == null) return false;
-  
   const filterStart = fromOrd ?? -Infinity;
   const filterEnd = toOrd ?? Infinity;
-  
   return docStart <= filterEnd && (docEnd || docStart) >= filterStart;
 }
 
@@ -971,13 +966,13 @@ function toCSV_fromRaw(rows){
     for (const k of Object.keys(raw)) keySet.add(k); 
   }
   const preferred = [
-    '\ufeffSDNID', 'SDNID', 'SDN_ID',
+    '\ufeffSDNID', 'SDNID', 'SDN_ID', 'SD_ID', // FIX: include SD_ID
     'DN_REF', 'DN_ref', 'RN_REF', 'RN_ref',
     'sammendrag', 'regest',
     'DN_source', 'RN_source',
     'DN_dato', 'RN_dato',
     'DN_sted', 'RN_sted', 'Normalized_name',
-    'brevtekst', 'fotnoter_DN', 'fotnoter_N', 'Tillegg',
+    'brevtekst', 'fotnoter_DN', 'fotnoter_RN', 'fotnoter_N', 'Tillegg',
     'date_start', 'date_end', 'lat', 'lon', 'uncertain_loc'
   ];
   const presentPreferred = preferred.filter(k => keySet.has(k));
