@@ -1,26 +1,22 @@
-/* global MiniSearch, document, window, fetch */
+/* global document, window, fetch */
 
 /**
- * SuperDiplomatarium — OPTIMIZED Enhanced Search (fixed)
- * Key fixes:
- * - Progressive search: no waiting for full index; falls back gracefully.
- * - Candidate ID mismatch fixed (string doc.id -> numeric global id).
- * - Ignore empty/not-yet-loaded index (don’t block results).
- * - Small robustness tweaks (field fallbacks).
+ * SuperDiplomatarium — Search (date-index only)
+ * - No text indexing at all (prevents crashes).
+ * - Keeps a compact index on dates for fast filtering.
+ * - Text search (exact/fuzzy) is linear over the date-filtered subset.
  */
 
 // =============== Globals ===============
-let searchIndex = null;
 let allLetters = [];
 let DOCS = new Map();
+
 let chunksLoaded = 0;
 let totalChunks = 0;
 let debounceTimer = null;
 
-let CHUNK_SIZE = 1000; // FIX: filled from metadata if available
+let CHUNK_SIZE = 1000; // from metadata if present (not critical but kept)
 
-// NEW: Optimized search indexes
-let SEARCH_INDEX = null;
 let DISTANCE_CACHE = new Map();
 const MAX_CACHE_SIZE = 10000;
 
@@ -31,6 +27,10 @@ const PAGE_SIZE = 50;
 
 let searchMode = 'fuzzy';
 let fuzzyDistance = 1;
+
+// Date index (only index we keep)
+let DATE_RECORDS = [];   // { start, end, id }
+let DATE_SORTED = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
   await initializeSearch();
@@ -43,69 +43,44 @@ document.addEventListener('DOMContentLoaded', async () => {
 function BASE() { return (window.SITE_BASE || '').replace(/\/+$/, ''); }
 function updateStatus(msg) { const el = document.getElementById('search-status'); if (el) el.textContent = msg; }
 
-// =============== Optimized Fuzzy Matching ===============
+// =============== Fuzzy matching utils (unchanged core) ===============
 function normalizeForScoring(s) { 
   return (s || '').toLowerCase().replace(/-\s*/g, ''); 
 }
-
 function tokenizeCanonical(s) { 
   const joined = normalizeForScoring(s); 
   return joined.match(/[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+/gi) || []; 
 }
-
-function generateTrigrams(text) {
-  const normalized = normalizeForScoring(text).replace(/\s/g, '');
-  if (normalized.length < 3) return new Set();
-  const trigrams = new Set();
-  for (let i = 0; i <= normalized.length - 3; i++) {
-    trigrams.add(normalized.slice(i, i + 3));
-  }
-  return trigrams;
+function bigramsOf(s) {
+  const out = [];
+  for (let i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2));
+  return out;
 }
-
-function generateBigrams(text) {
-  const normalized = normalizeForScoring(text).replace(/\s/g, '');
-  if (normalized.length < 2) return new Set();
-  const bigrams = new Set();
-  for (let i = 0; i <= normalized.length - 2; i++) {
-    bigrams.add(normalized.slice(i, i + 2));
+function diceCoeff(a, b) {
+  if (!a.length || !b.length) return 0;
+  const m = new Map();
+  for (const x of a) m.set(x, (m.get(x) || 0) + 1);
+  let inter = 0;
+  for (const y of b) {
+    const k = m.get(y) || 0;
+    if (k > 0) { inter++; m.set(y, k - 1); }
   }
-  return bigrams;
-}
-
-// Memoized distance calculation
-function getCachedDistance(a, b) {
-  const key = `${a}|${b}`;
-  if (DISTANCE_CACHE.has(key)) {
-    return DISTANCE_CACHE.get(key);
-  }
-  const dist = tokenDistance(a, b);
-  if (DISTANCE_CACHE.size > MAX_CACHE_SIZE) {
-    const firstKey = DISTANCE_CACHE.keys().next().value;
-    DISTANCE_CACHE.delete(firstKey);
-  }
-  DISTANCE_CACHE.set(key, dist);
-  return dist;
+  return (2 * inter) / (a.length + b.length);
 }
 
 const CONFUSION_GROUPS = [['d','t'], ['v','u','w'], ['i','j','y'], ['c','k','q']];
-
 function inSameGroup(a, b) {
   if (a === b) return true;
-  for (const g of CONFUSION_GROUPS) 
-    if (g.includes(a) && g.includes(b)) return true;
+  for (const g of CONFUSION_GROUPS) if (g.includes(a) && g.includes(b)) return true;
   return false;
 }
-
-function subCost(a, b) { 
-  return a === b ? 0 : (inSameGroup(a, b) ? 0.35 : 1); 
-}
+function subCost(a, b) { return a === b ? 0 : (inSameGroup(a, b) ? 0.35 : 1); }
 
 function weightedEdit(a, b, maxCostHint) {
   const m = a.length, n = b.length;
   if (!m) return n;
   if (!n) return m;
-  if (maxCostHint && Math.abs(m - n) > maxCostHint * 2) return maxCostHint * 2; // early out
+  if (maxCostHint && Math.abs(m - n) > maxCostHint * 2) return maxCostHint * 2;
 
   const band = Math.max(2, Math.abs(m - n) + 1);
   let prev = new Array(n + 1), curr = new Array(n + 1);
@@ -128,44 +103,25 @@ function weightedEdit(a, b, maxCostHint) {
       if (val < rowMin) rowMin = val;
     }
     for (let j = jEnd + 1; j <= n; j++) curr[j] = Number.POSITIVE_INFINITY;
-    if (maxCostHint && rowMin > maxCostHint * 1.6) return rowMin; // early out
+    if (maxCostHint && rowMin > maxCostHint * 1.6) return rowMin;
     const tmp = prev; prev = curr; curr = tmp;
   }
   return prev[n];
 }
 
-function bigramsOf(s) {
-  const out = [];
-  for (let i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2));
-  return out;
-}
-
-function diceCoeff(a, b) {
-  if (!a.length || !b.length) return 0;
-  const m = new Map();
-  for (const x of a) m.set(x, (m.get(x) || 0) + 1);
-  let inter = 0;
-  for (const y of b) {
-    const k = m.get(y) || 0;
-    if (k > 0) { inter++; m.set(y, k - 1); }
-  }
-  return (2 * inter) / (a.length + b.length);
-}
-
-function tokenDistance(qRaw, wRaw) {
-  const q = qRaw.toLowerCase(), w = wRaw.toLowerCase();
-  if (!q || !w) return 1e9;
-  if (q === w) return 0;                           // exact
-  if (w.startsWith(q) || q.startsWith(w)) return 0.1; // fast prefix
-
-  const maxPrefix = Math.min(2, Math.min(q.length, w.length));
-  let p = 0;
-  for (let i = 0; i < maxPrefix; i++) if (q[i] !== w[i]) p += 0.35;
-
+function getCachedDistance(a, b) {
+  const key = `${a}|${b}`;
+  if (DISTANCE_CACHE.has(key)) return DISTANCE_CACHE.get(key);
+  const q = a.toLowerCase(), w = b.toLowerCase();
+  if (q === w) { DISTANCE_CACHE.set(key, 0); return 0; }
+  if (w.startsWith(q) || q.startsWith(w)) { DISTANCE_CACHE.set(key, 0.1); return 0.1; }
   const maxLen = Math.max(q.length, w.length);
   const we = weightedEdit(q, w, Math.ceil(maxLen * 0.5)) / maxLen;
   const dice = 1 - diceCoeff(bigramsOf(q), bigramsOf(w));
-  return 0.7 * (we + p) + 0.3 * dice;
+  const dist = 0.7 * we + 0.3 * dice;
+  if (DISTANCE_CACHE.size > MAX_CACHE_SIZE) DISTANCE_CACHE.clear();
+  DISTANCE_CACHE.set(key, dist);
+  return dist;
 }
 
 function thresholdFor(dist) {
@@ -173,115 +129,48 @@ function thresholdFor(dist) {
   return [0.28, 0.34, 0.42, 0.50][d];
 }
 
-// =============== Candidate handling ===============
-
-// FIX: treat index as "not ready" if missing or empty
-function indexIsReady() {
-  if (!SEARCH_INDEX) return false;
-  const t = SEARCH_INDEX.tokens || {};
-  const g = SEARCH_INDEX.trigrams || {};
-  return (Object.keys(t).length + Object.keys(g).length) > 0;
+// =============== Date index helpers ===============
+function addToDateIndex(doc) {
+  if (doc.ORD_START != null) {
+    DATE_RECORDS.push({
+      start: doc.ORD_START,
+      end: doc.ORD_END ?? doc.ORD_START,
+      id: doc.id
+    });
+    DATE_SORTED = false;
+  }
 }
-
-// FIX: turn "DNxxx#chunk:row" into a numeric global id = chunk*CHUNK_SIZE + row
-function numericIdFromDoc(docOrId) {
-  const id = typeof docOrId === 'string' ? docOrId : docOrId.id;
-  const hash = (id || '').split('#')[1] || '';
-  const [chunkStr, rowStr] = hash.split(':');
-  const chunk = parseInt(chunkStr, 10);
-  const row   = parseInt(rowStr, 10);
-  if (Number.isFinite(chunk) && Number.isFinite(row)) {
-    return chunk * CHUNK_SIZE + row;
+function ensureDateIndexSorted() {
+  if (!DATE_SORTED) {
+    DATE_RECORDS.sort((a, b) => a.start - b.start);
+    DATE_SORTED = true;
   }
-  return null;
 }
-
-// NEW: Fast candidate filtering using pre-computed indexes
-function getCandidatesFromIndexes(query, maxCandidates = 3000) {
-  // FIX: if index not ready, skip candidate filtering (return null, not empty set)
-  if (!indexIsReady()) return null;
-
-  const candidates = new Set();
-  const queryTokens = tokenizeCanonical(query);
-  
-  // Try exact token matches first (fastest)
-  for (const token of queryTokens) {
-    const tokenLower = token.toLowerCase();
-    if (SEARCH_INDEX.tokens[tokenLower]) {
-      SEARCH_INDEX.tokens[tokenLower].forEach(id => candidates.add(id));
-    }
-    // Try prefixes
-    for (let i = Math.min(token.length, 5); i >= 3; i--) {
-      const prefix = tokenLower.slice(0, i);
-      if (SEARCH_INDEX.tokens[prefix]) {
-        SEARCH_INDEX.tokens[prefix].forEach(id => candidates.add(id));
-      }
-    }
-    if (candidates.size > maxCandidates) break;
+function upperBoundByStart(value) {
+  // first index with start > value
+  let lo = 0, hi = DATE_RECORDS.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (DATE_RECORDS[mid].start <= value) lo = mid + 1; else hi = mid;
   }
-  
-  // If we have enough candidates, return them
-  if (candidates.size >= 100) {
-    return candidates;
-  }
-  
-  // Use trigrams for fuzzy matching
-  const queryTrigrams = generateTrigrams(query);
-  const trigramCandidates = new Map(); // doc_id -> match_count
-  
-  queryTrigrams.forEach(tri => {
-    const bucket = SEARCH_INDEX.trigrams[tri];
-    if (bucket) {
-      bucket.forEach(id => trigramCandidates.set(id, (trigramCandidates.get(id) || 0) + 1));
-    }
-  });
-  
-  // Add documents with highest trigram overlap
-  const sorted = Array.from(trigramCandidates.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, maxCandidates);
-  sorted.forEach(([id]) => candidates.add(id));
-
-  // FIX: if still empty, treat as "no candidates filter"
-  return candidates.size ? candidates : null;
+  return lo;
 }
+function getDocsByDateRange(fromOrd, toOrd) {
+  if (fromOrd == null && toOrd == null) return allLetters;
+  ensureDateIndexSorted();
+  const filterStart = fromOrd ?? -Infinity;
+  const filterEnd = toOrd ?? Infinity;
 
-// Check if document matches fuzzy search (now with candidate pre-filtering)
-function docMatchesFuzzy(doc, queryTokens, fields, threshold, candidates = null) {
-  if (queryTokens.length === 0) return true;
-
-  // FIX: candidate membership uses numeric global id; only apply if candidates is non-null
-  if (candidates) {
-    const nid = numericIdFromDoc(doc);
-    if (nid == null || !candidates.has(nid)) return false;
-  }
-  
-  for (const field of fields) {
-    const text = normalizeForScoring(doc[field] || '');
-    const docTokens = tokenizeCanonical(text);
-    let allMatch = true;
-
-    for (const qToken of queryTokens) {
-      let foundMatch = false;
-
-      // Check hyphenated combinations
-      for (let i = 0; i < docTokens.length - 1; i++) {
-        const combined = docTokens[i] + docTokens[i + 1];
-        if (getCachedDistance(qToken, combined) <= threshold) { foundMatch = true; break; }
-      }
-      if (!foundMatch) {
-        // Check individual tokens with early termination
-        for (const dToken of docTokens) {
-          const lenDiff = Math.abs(qToken.length - dToken.length);
-          if (lenDiff > qToken.length * 0.5) continue;
-          if (getCachedDistance(qToken, dToken) <= threshold) { foundMatch = true; break; }
-        }
-      }
-      if (!foundMatch) { allMatch = false; break; }
+  const ub = Number.isFinite(filterEnd) ? upperBoundByStart(filterEnd) : DATE_RECORDS.length;
+  const out = [];
+  for (let i = 0; i < ub; i++) {
+    const r = DATE_RECORDS[i];
+    if (r.end >= filterStart) {
+      const doc = DOCS.get(r.id);
+      if (doc) out.push(doc);
     }
-    if (allMatch) return true;
   }
-  return false;
+  return out;
 }
 
 // =============== Init + Loading ===============
@@ -293,79 +182,17 @@ async function initializeSearch() {
     if (!metaResponse.ok) throw new Error(`HTTP ${metaResponse.status} on ${metaUrl}`);
     const metadata = await metaResponse.json();
     totalChunks = metadata.chunks;
-    CHUNK_SIZE = Number(metadata.chunk_size) || CHUNK_SIZE; // FIX: remember for numeric IDs
+    CHUNK_SIZE = Number(metadata.chunk_size) || CHUNK_SIZE;
 
-    // Load the optimized search index first (chunked, if present)
-    if (metadata.has_search_index && metadata.index_metadata) {
-      updateStatus('Laster søkeindeks…');
-      try {
-        await loadChunkedIndexes(metadata.index_metadata);
-        console.log('✓ Loaded optimized search index:', {
-          trigrams: Object.keys(SEARCH_INDEX.trigrams).length,
-          tokens: Object.keys(SEARCH_INDEX.tokens).length,
-          docs: SEARCH_INDEX.total_docs
-        });
-      } catch (err) {
-        console.warn('Could not load search index, falling back to standard search:', err);
-      }
-    } else {
-      // FIX: If no index metadata at all, keep SEARCH_INDEX = null so we skip candidate filtering
-      SEARCH_INDEX = null;
-    }
-
-    // Create MiniSearch and load first chunk
-    searchIndex = new MiniSearch({
-      idField: 'id',
-      fields: ['sammendrag', 'brevtekst', 'sted_all', 'kilde'],
-      storeFields: [
-        'DN_ref','RN_ref','SDN_ID',
-        'regest','sammendrag_raw','brevtekst',
-        'date_start','date_end','date_rn_text','date_dn_text',
-        'sted_dn','sted_rn','normalized_name','sted_all',
-        'kilde','fotnoter','tillegg'
-      ],
-      searchOptions: { 
-        boost:{ sted_all:4, sammendrag:3, brevtekst:2 }, 
-        fuzzy: false,
-        prefix: true 
-      }
-    });
-
-    await loadChunk(0);               // load first chunk
+    await loadChunk(0);
     updateStatus(`Lastet 1 av ${totalChunks} deler…`);
-    setTimeout(() => performSearch(), 0); // FIX: enable immediate search on the first chunk
+    // Run an initial (empty) search to clear UI state quickly
+    setTimeout(() => performSearch(), 0);
 
-    // Load the rest in the background
     loadRemainingChunks();
   } catch (err) {
     console.error('Feil ved initialisering:', err);
     updateStatus('Kunne ikke laste brevsamlingen. Prøv å laste siden på nytt.');
-  }
-}
-
-async function loadChunkedIndexes(indexMetadata) {
-  SEARCH_INDEX = {
-    trigrams: {},
-    bigrams: {},
-    tokens: {},
-    total_docs: indexMetadata.total_docs
-  };
-
-  // We fetch sequentially to be kind to static hosting; could be parallel if desired.
-  for (let i = 0; i < indexMetadata.trigram_chunks; i++) {
-    const url = `${BASE()}/data/indexes/trigrams-${String(i).padStart(2, '0')}.json`;
-    const res = await fetch(url);
-    if (res.ok) Object.assign(SEARCH_INDEX.trigrams, await res.json());
-  }
-  for (let i = 0; i < indexMetadata.token_chunks; i++) {
-    const url = `${BASE()}/data/indexes/tokens-${String(i).padStart(2, '0')}.json`;
-    const res = await fetch(url);
-    if (res.ok) Object.assign(SEARCH_INDEX.tokens, await res.json());
-  }
-  for (let i = 0; i < indexMetadata.bigram_chunks; i++) {
-    const url = `${BASE()}/data/indexes/bigrams-${String(i).padStart(2, '0')}.json`;
-    const res = await fetch(url);
-    if (res.ok) Object.assign(SEARCH_INDEX.bigrams, await res.json());
   }
 }
 
@@ -377,8 +204,10 @@ async function loadChunk(i) {
 
   const docs = raw.map((row, k) => normalizeLetter(row, i, k));
   allLetters.push(...docs);
-  for (const d of docs) DOCS.set(d.id, d);
-  searchIndex.addAll(docs);
+  for (const d of docs) {
+    DOCS.set(d.id, d);
+    addToDateIndex(d); // only index dates
+  }
 
   chunksLoaded++;
   updateStatus(`Lastet ${chunksLoaded} av ${totalChunks} deler…`);
@@ -386,12 +215,12 @@ async function loadChunk(i) {
 
 async function loadRemainingChunks() {
   for (let i = 1; i < totalChunks; i++) {
-    try { 
+    try {
       await loadChunk(i);
-      // Optional: live re-run current query as more data arrives, throttled
-      if (i % 2 === 0) performSearch();
-    } catch (e) { 
-      console.error(`Del ${i} feilet:`, e); 
+      // (Optional) Refresh results occasionally as more data arrives
+      if (i % 3 === 0) performSearch();
+    } catch (e) {
+      console.error(`Del ${i} feilet:`, e);
     }
   }
   updateStatus(`${allLetters.length} brev lastet og klare for søk!`);
@@ -399,7 +228,6 @@ async function loadRemainingChunks() {
 
 // =============== Normalization ===============
 function normalizeLetter(raw, chunkIndex, rowIndex) {
-  // FIX: include SD_ID as a fallback for SDN_ID
   const sdn  = raw.SDN_ID || raw.SDNID || raw['\ufeffSDNID'] || raw['ï»¿SDNID'] || raw.SD_ID || null;
   const dn   = raw.DN_REF || raw.DN_ref || raw.DNREF || null;
   const rn   = raw.RN_REF || raw.RN_ref || null;
@@ -423,7 +251,6 @@ function normalizeLetter(raw, chunkIndex, rowIndex) {
   const normalized_name = raw.Normalized_name || raw.normalized_name || '';
   const sted_all = [sted_dn, sted_rn, normalized_name].filter(Boolean).join(' | ');
 
-  // FIX: include fotnoter_RN as well
   const fotnoterCombined = [raw.fotnoter_DN, raw.fotnoter_RN, raw.fotnoter_N].filter(Boolean).join('\n');
   const tillegg = raw.Tillegg || raw.tillegg || '';
 
@@ -485,12 +312,10 @@ function dateStrToOrd(s, endSide){
   
   return null;
 }
-
 function daysInMonth(y, m){ 
   if(m === 2) return (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)) ? 29 : 28; 
   return [4, 6, 9, 11].includes(m) ? 30 : 31; 
 }
-
 function clampYear(y){ return Math.min(Math.max(y, 1), 9999); }
 function clampMonth(m){ return Math.min(Math.max(m, 1), 12); }
 function clampDay(y, m, d){ return Math.min(Math.max(d, 1), daysInMonth(y, m)); }
@@ -503,7 +328,7 @@ function readUIRangeOrd(){
   const fv = (fromEl?.value || '').trim();
   const tv = (toEl?.value || '').trim();
 
-  if(exact){
+  if (exact) {
     if(!fv) return { fromOrd: null, toOrd: null };
     return { fromOrd: dateStrToOrd(fv, false), toOrd: dateStrToOrd(fv, true) };
   }
@@ -521,7 +346,7 @@ function fieldListForCheckboxes() {
   return fields.length ? fields : ['sammendrag', 'brevtekst', 'sted_all', 'kilde'];
 }
 
-// =============== OPTIMIZED Search Execution ===============
+// =============== Search Execution (no text indexing) ===============
 function performSearch() {
   const q = (document.getElementById('search-input')?.value || '').trim();
   const { fromOrd: uiFrom, toOrd: uiTo } = readUIRangeOrd();
@@ -537,6 +362,7 @@ function performSearch() {
   let results = [];
   const startTime = performance.now();
 
+  // Fast path: nothing to search and no date range
   if (!q && !hasDateFilter) {
     currentResultsAll = [];
     currentPage = 1;
@@ -546,76 +372,67 @@ function performSearch() {
     return;
   }
 
-  if (!q && hasDateFilter) {
-    results = allLetters.filter(doc => dateMatches(doc, uiFrom, uiTo));
-    console.log(`Date-only: ${results.length} results in ${(performance.now() - startTime).toFixed(1)}ms`);
+  // Preselect docs by date using the date index (fast)
+  const dateSubset = getDocsByDateRange(uiFrom, uiTo);
+
+  if (!q) {
+    results = dateSubset;
   } else if (searchMode === 'exact') {
-    const miniResults = searchIndex.search(q, { 
-      fields: selectedFields, 
-      combineWith: 'AND',
-      fuzzy: false,
-      prefix: false
+    const needle = q.toLowerCase();
+    results = dateSubset.filter(doc => {
+      for (const f of selectedFields) {
+        const hay = String(doc[f] || '').toLowerCase();
+        if (hay.includes(needle)) return true;
+      }
+      return false;
     });
-    const resultIds = new Set(miniResults.map(r => r.id));
-    results = allLetters.filter(doc => {
-      if (!resultIds.has(doc.id)) return false;
-      if (hasDateFilter && !dateMatches(doc, uiFrom, uiTo)) return false;
-      return true;
-    });
-    console.log(`Exact: ${results.length} results in ${(performance.now() - startTime).toFixed(1)}ms`);
   } else {
-    // OPTIMIZED FUZZY SEARCH
+    // Fuzzy scan over the date subset only
     const queryTokens = tokenizeCanonical(q);
     const threshold = thresholdFor(fuzzyDistance);
-    
-    // Use pre-computed indexes to get candidates (or null if index not ready/empty)
-    const candidates = getCandidatesFromIndexes(q, 3000);
-    if (candidates) console.log(`Index returned ${candidates.size} candidates`);
-
-    // Filter candidates (or all docs if no index)
-    let docsToCheck;
-    if (candidates) {
-      // FIX: map doc string IDs to numeric global ids using CHUNK_SIZE
-      const candSet = candidates;
-      docsToCheck = allLetters.filter(d => {
-        const nid = numericIdFromDoc(d);
-        return nid != null && candSet.has(nid);
-      });
-    } else {
-      docsToCheck = allLetters;
-    }
-    
-    results = docsToCheck.filter(doc => {
-      if (!docMatchesFuzzy(doc, queryTokens, selectedFields, threshold, candidates)) return false;
-      if (hasDateFilter && !dateMatches(doc, uiFrom, uiTo)) return false;
-      return true;
-    });
-    
-    const elapsed = (performance.now() - startTime).toFixed(1);
-    console.log(`Fuzzy (level ${fuzzyDistance}): ${results.length} results in ${elapsed}ms${candidates ? ` (from ${docsToCheck.length} candidates)` : ''}`);
+    results = dateSubset.filter(doc => docMatchesFuzzy_NoIndex(doc, queryTokens, selectedFields, threshold));
   }
+
+  const elapsed = (performance.now() - startTime).toFixed(1);
+  console.log(`Search over ${dateSubset.length} docs => ${results.length} results in ${elapsed}ms`);
 
   currentResultsAll = results.map(r => Object.assign({}, r, { query: q }));
   currentPage = 1;
   renderPage();
   setExportEnabled(currentResultsAll.length > 0);
-  
-  // Clear cache periodically to prevent memory bloat
-  if (DISTANCE_CACHE.size > MAX_CACHE_SIZE * 2) {
-    DISTANCE_CACHE.clear();
+}
+
+function docMatchesFuzzy_NoIndex(doc, queryTokens, fields, threshold) {
+  if (queryTokens.length === 0) return true;
+
+  for (const field of fields) {
+    const text = normalizeForScoring(doc[field] || '');
+    const docTokens = tokenizeCanonical(text);
+    let allMatch = true;
+
+    for (const qToken of queryTokens) {
+      let foundMatch = false;
+
+      // hyphen-combo check
+      for (let i = 0; i < docTokens.length - 1; i++) {
+        const combined = docTokens[i] + docTokens[i + 1];
+        if (getCachedDistance(qToken, combined) <= threshold) { foundMatch = true; break; }
+      }
+      if (!foundMatch) {
+        for (const dToken of docTokens) {
+          const lenDiff = Math.abs(qToken.length - dToken.length);
+          if (lenDiff > qToken.length * 0.5) continue;
+          if (getCachedDistance(qToken, dToken) <= threshold) { foundMatch = true; break; }
+        }
+      }
+      if (!foundMatch) { allMatch = false; break; }
+    }
+    if (allMatch) return true;
   }
+  return false;
 }
 
-function dateMatches(doc, fromOrd, toOrd) {
-  if (fromOrd == null && toOrd == null) return true;
-  const docStart = doc.ORD_START;
-  const docEnd = doc.ORD_END || doc.ORD_START;
-  if (docStart == null) return false;
-  const filterStart = fromOrd ?? -Infinity;
-  const filterEnd = toOrd ?? Infinity;
-  return docStart <= filterEnd && (docEnd || docStart) >= filterStart;
-}
-
+// =============== Pagination ===============
 function renderPage(){
   const total = currentResultsAll.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -627,8 +444,11 @@ function renderPage(){
   renderPagination(total);
 }
 
-// =============== Highlighting (unchanged) ===============
+// =============== Highlighting ===============
 function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function escapeHtml(s){ 
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); 
+}
 
 function highlightExact(text, query) {
   if (!query) return escapeHtml(text);
@@ -643,19 +463,16 @@ function markHyphenPairs(text, shouldMarkCombined) {
     shouldMarkCombined((a + b).toLowerCase()) ? '<mark>' + a + '-' + ws + b + '</mark>' : m
   );
 }
-
 function highlightOutsideMarks(html, highlighterFn) {
   const parts = html.split(/(<mark>.*?<\/mark>)/gis);
   return parts.map(seg => (seg.toLowerCase().startsWith('<mark>') ? seg : highlighterFn(seg))).join('');
 }
-
 function highlightFuzzy(text, queryTokens, fuzzyDistSetting) {
   if (queryTokens.length === 0) return escapeHtml(text);
   const th = thresholdFor(fuzzyDistSetting);
   
   const withPairs = markHyphenPairs(text, (joined) => {
-    for (const q of queryTokens) 
-      if (getCachedDistance(q, joined) <= th) return true;
+    for (const q of queryTokens) if (getCachedDistance(q, joined) <= th) return true;
     return false;
   });
   
@@ -673,7 +490,7 @@ function highlightFuzzy(text, queryTokens, fuzzyDistSetting) {
   });
 }
 
-// =============== Rendering (unchanged) ===============
+// =============== Rendering ===============
 function updateResults(results, from = 0, to = 0, total = 0){
   const container = document.getElementById('search-results');
   if (!container) return;
@@ -834,7 +651,6 @@ function wireListeners(){
       setTimeout(() => { df.style.borderColor = 'var(--c-olive)'; }, 300);
     });
   }
-  
   if (dt) {
     dt.addEventListener('input', debounceDates);
     dt.addEventListener('input', () => {
@@ -842,7 +658,6 @@ function wireListeners(){
       setTimeout(() => { dt.style.borderColor = 'var(--c-olive)'; }, 300);
     });
   }
-  
   if (ex) {
     ex.addEventListener('change', () => {
       if (ex.checked) { 
@@ -860,7 +675,6 @@ function wireListeners(){
       performSearch();
     });
   }
-  
   if (rs) {
     rs.addEventListener('click', () => {
       if (df) df.value = ''; 
@@ -966,7 +780,7 @@ function toCSV_fromRaw(rows){
     for (const k of Object.keys(raw)) keySet.add(k); 
   }
   const preferred = [
-    '\ufeffSDNID', 'SDNID', 'SDN_ID', 'SD_ID', // FIX: include SD_ID
+    '\ufeffSDNID', 'SDNID', 'SDN_ID', 'SD_ID',
     'DN_REF', 'DN_ref', 'RN_REF', 'RN_ref',
     'sammendrag', 'regest',
     'DN_source', 'RN_source',
@@ -987,7 +801,7 @@ function toCSV_fromRaw(rows){
   return lines.join('\r\n');
 }
 
-// =============== Utilities ===============
+// =============== Misc utilities ===============
 function formatDateRange(start, end){
   const ys = parseYear(start); 
   const ye = (parseYear(end) ?? ys);
@@ -996,16 +810,10 @@ function formatDateRange(start, end){
   if (ye) return String(ye); 
   return 'Ukjent';
 }
-
 function parseYear(s){ 
   const m = String(s || '').match(/^(\d{4})/); 
   return m ? Number(m[1]) : null; 
 }
-
-function escapeHtml(s){ 
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); 
-}
-
 function dnToArchaic(dn){ 
   if (!dn) return ''; 
   const m = String(dn).match(/^DN(\d{3})(\d{5})$/i); 
@@ -1013,20 +821,13 @@ function dnToArchaic(dn){
   const vol = parseInt(m[1], 10), num = parseInt(m[2], 10); 
   return `Diplomatarium Norvegicum ${toRoman(vol)}, ${num}`; 
 }
-
 function toRoman(num){ 
   if (!Number.isFinite(num) || num <= 0) return ''; 
   const map = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]; 
   let out = ''; 
-  for (const [v, s] of map) { 
-    while (num >= v) { 
-      out += s; 
-      num -= v; 
-    } 
-  } 
+  for (const [v, s] of map) { while (num >= v) { out += s; num -= v; } } 
   return out; 
 }
-
 function downloadText(text, filename, opts = {}){ 
   const parts = []; 
   if (opts.addBOM) parts.push('\uFEFF'); 
@@ -1034,16 +835,10 @@ function downloadText(text, filename, opts = {}){
   const blob = new Blob(parts, {type: 'text/plain;charset=utf-8'}); 
   const url = URL.createObjectURL(blob); 
   const a = document.createElement('a'); 
-  a.href = url; 
-  a.download = filename; 
-  document.body.appendChild(a); 
-  a.click(); 
-  setTimeout(() => { 
-    document.body.removeChild(a); 
-    URL.revokeObjectURL(url); 
-  }, 0); 
+  a.href = url; a.download = filename; 
+  document.body.appendChild(a); a.click(); 
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0); 
 }
-
 function snippet(t, n, isHtml = false){ 
   if (isHtml) {
     const temp = document.createElement('div');
@@ -1054,17 +849,10 @@ function snippet(t, n, isHtml = false){
     const parts = t.split(/(<[^>]+>)/);
     let result = '';
     for (const part of parts) {
-      if (part.startsWith('<')) {
-        result += part;
-      } else {
-        if (charCount + part.length <= n) {
-          result += part;
-          charCount += part.length;
-        } else {
-          const remaining = n - charCount;
-          result += part.slice(0, remaining).replace(/\s+\S*$/, '');
-          break;
-        }
+      if (part.startsWith('<')) { result += part; }
+      else {
+        if (charCount + part.length <= n) { result += part; charCount += part.length; }
+        else { const remaining = n - charCount; result += part.slice(0, remaining).replace(/\s+\S*$/, ''); break; }
       }
     }
     return result + '…';
