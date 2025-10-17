@@ -348,4 +348,82 @@
     color: var(--c-light);
   }
   .btn-olive:active{ transform: translateY(1px); }
+  /* Additional CSS for Enhanced Search Controls */
+
+/* Search mode controls */
+.search-mode-row {
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  margin-bottom: .5rem; padding: .5rem 0;
+  border-bottom: 2px solid var(--c-olive);
+}
+
+.mode-label { 
+  font-weight: 600; 
+  color: var(--c-dark); 
+}
+
+.mode-select {
+  border: 2px solid var(--c-olive);
+  background: var(--c-light);
+  color: var(--c-dark);
+  border-radius: 8px;
+  padding: .45rem .6rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.mode-select:hover {
+  border-color: var(--c-sand);
+}
+
+.fuzzy-controls {
+  display: flex; 
+  align-items: center; 
+  gap: .5rem;
+  margin-left: auto;
+}
+
+.fuzzy-controls label { 
+  font-weight: 600; 
+  color: var(--c-dark); 
+}
+
+#fuzzy-distance {
+  width: 120px;
+  accent-color: var(--c-olive);
+  cursor: pointer;
+}
+
+.fuzzy-label {
+  min-width: 100px;
+  font-style: italic;
+  color: var(--c-olive);
+  font-size: .95rem;
+}
+
+/* Highlighted search terms */
+mark {
+  background: var(--c-sand);
+  color: var(--c-dark);
+  padding: 0 .15em;
+  border-radius: 2px;
+  font-weight: 600;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .search-mode-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
   
+  .fuzzy-controls {
+    margin-left: 0;
+    width: 100%;
+  }
+  
+  #fuzzy-distance {
+    flex: 1;
+  }
+}

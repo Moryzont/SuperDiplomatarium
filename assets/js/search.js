@@ -1,13 +1,11 @@
 /* global MiniSearch, document, window, fetch */
 
 /**
- * SuperDiplomatarium – Søk (dataset v2)
- * - Sammendrag search also searches in "regest" (kept separate for display)
- * - Sted search covers DN_sted, RN_sted, Normalized_name
- * - Kilde search covers DN_source and RN_source
- * - Result cards show a regest preview
- * - Full view shows RN/DN dates and places, and lists Regest above Sammendrag
- * - Date-only searches work; pagination + export kept
+ * SuperDiplomatarium – Enhanced Search with Advanced Fuzzy Matching
+ * - Weighted edit distance with letter confusion groups
+ * - Exact vs. Fuzzy search modes
+ * - Adjustable fuzzy distance
+ * - All existing features preserved (date filtering, field selection, etc.)
  */
 
 // =============== Globals ===============
@@ -23,6 +21,10 @@ let currentResultsShown = [];
 let currentPage = 1;
 const PAGE_SIZE = 50;
 
+// Fuzzy search state
+let searchMode = 'fuzzy'; // 'exact' or 'fuzzy'
+let fuzzyDistance = 1; // 0-3
+
 document.addEventListener('DOMContentLoaded', async () => {
   await initializeSearch();
   wireListeners();
@@ -35,6 +37,158 @@ document.addEventListener('DOMContentLoaded', async () => {
 function BASE() { return (window.SITE_BASE || '').replace(/\/+$/, ''); }
 function updateStatus(msg) { const el = document.getElementById('search-status'); if (el) el.textContent = msg; }
 
+// =============== Fuzzy Search Algorithm (from viewer.html) ===============
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function normalizeForScoring(s) { return (s || '').toLowerCase().replace(/-\s+/g, ''); }
+function tokenizeCanonical(s) { 
+  const joined = normalizeForScoring(s); 
+  return joined.match(/[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß\-]+/gi) || []; 
+}
+
+const CONFUSION_GROUPS = [['d','t'], ['v','u','w'], ['i','j','y'], ['c','k','q']];
+
+function inSameGroup(a, b) {
+  if (a === b) return true;
+  for (const g of CONFUSION_GROUPS) 
+    if (g.includes(a) && g.includes(b)) return true;
+  return false;
+}
+
+function subCost(a, b) { 
+  return a === b ? 0 : (inSameGroup(a, b) ? 0.35 : 1); 
+}
+
+function weightedEdit(a, b, maxCostHint) {
+  const m = a.length, n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  const band = Math.max(2, Math.abs(m - n) + 1);
+  let prev = new Array(n + 1), curr = new Array(n + 1);
+  
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    let rowMin = curr[0];
+    const jStart = Math.max(1, i - band), jEnd = Math.min(n, i + band);
+    
+    for (let j = 1; j < jStart; j++) curr[j] = Number.POSITIVE_INFINITY;
+    
+    for (let j = jStart; j <= jEnd; j++) {
+      const costSub = prev[j - 1] + subCost(a[i - 1], b[j - 1]);
+      const costIns = curr[j - 1] + 1, costDel = prev[j] + 1;
+      let val = Math.min(costSub, costIns, costDel);
+      
+      // Transposition
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        val = Math.min(val, prev[j - 2] + subCost(a[i - 2], b[j - 2]));
+      }
+      curr[j] = val;
+      if (val < rowMin) rowMin = val;
+    }
+    
+    for (let j = jEnd + 1; j <= n; j++) curr[j] = Number.POSITIVE_INFINITY;
+    
+    if (maxCostHint && rowMin > maxCostHint * 1.6) return rowMin;
+    
+    const tmp = prev; prev = curr; curr = tmp;
+  }
+  return prev[n];
+}
+
+function bigramsOf(s) {
+  const out = [];
+  for (let i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2));
+  return out;
+}
+
+function diceCoeff(a, b) {
+  if (!a.length || !b.length) return 0;
+  const m = new Map();
+  for (const x of a) m.set(x, (m.get(x) || 0) + 1);
+  let inter = 0;
+  for (const y of b) {
+    const k = m.get(y) || 0;
+    if (k > 0) { inter++; m.set(y, k - 1); }
+  }
+  return (2 * inter) / (a.length + b.length);
+}
+
+function tokenDistance(qRaw, wRaw) {
+  const q = qRaw.toLowerCase(), w = wRaw.toLowerCase();
+  if (!q || !w) return 1e9;
+  
+  const maxPrefix = Math.min(2, Math.min(q.length, w.length));
+  let p = 0;
+  for (let i = 0; i < maxPrefix; i++) 
+    if (q[i] !== w[i]) p += 0.35;
+  
+  const maxLen = Math.max(q.length, w.length);
+  const we = weightedEdit(q, w, Math.ceil(maxLen * 0.5)) / maxLen;
+  const dice = 1 - diceCoeff(bigramsOf(q), bigramsOf(w));
+  
+  return 0.7 * (we + p) + 0.3 * dice;
+}
+
+function thresholdFor(dist) {
+  const d = Math.max(0, Math.min(3, parseInt(dist || '1', 10)));
+  return [0.28, 0.34, 0.42, 0.50][d];
+}
+
+function highlightOutsideMarks(html, highlighterFn) {
+  const parts = html.split(/(<mark>.*?<\/mark>)/gis);
+  return parts.map(seg => (seg.toLowerCase().startsWith('<mark>') ? seg : highlighterFn(seg))).join('');
+}
+
+function markHyphenPairs(text, shouldMarkCombined) {
+  const rx = /([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)-(\s+)([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)/gi;
+  return (text || '').replace(rx, (m, a, ws, b) => 
+    shouldMarkCombined((a + b).toLowerCase()) ? '<mark>' + a + '-' + ws + b + '</mark>' : m
+  );
+}
+
+function highlightFuzzy(text, queryTokens, fuzzyDistSetting) {
+  if (queryTokens.length === 0) return escapeHtml(text);
+  const th = thresholdFor(fuzzyDistSetting);
+  
+  const withPairs = markHyphenPairs(text, (joined) => {
+    for (const q of queryTokens) 
+      if (tokenDistance(q, joined) <= th) return true;
+    return false;
+  });
+  
+  const tokenRx = /[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß\-]+/gi;
+  return highlightOutsideMarks(withPairs, (frag) => {
+    return escapeHtml(frag).replace(tokenRx, (m) => {
+      const unescaped = m.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+      let best = Infinity;
+      for (const q of queryTokens) {
+        const d = tokenDistance(q, unescaped.toLowerCase());
+        if (d < best) best = d;
+        if (best === 0) break;
+      }
+      return best <= th ? '<mark>' + m + '</mark>' : m;
+    });
+  });
+}
+
+function highlightExact(text, query) {
+  if (!query) return escapeHtml(text);
+  const escaped = escapeHtml(text);
+  const rx = new RegExp(escapeRegex(query), 'gi');
+  let out = escaped.replace(rx, '<mark>$&</mark>');
+  
+  // Handle hyphenated words
+  const pairRx = /([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)-(\s+)([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)/gi;
+  out = out.replace(pairRx, (m, a, ws, b) => {
+    if ((a + b).toLowerCase() === query.toLowerCase()) {
+      return '<mark>' + a + '-' + ws + b + '</mark>';
+    }
+    return m;
+  });
+  return out;
+}
+
 // =============== Init + Loading ===============
 async function initializeSearch() {
   updateStatus('Laster inn brevsamlingen…');
@@ -45,23 +199,17 @@ async function initializeSearch() {
     const metadata = await metaResponse.json();
     totalChunks = metadata.chunks;
 
-    // We index combined fields but store the granular ones for display.
     searchIndex = new MiniSearch({
       idField: 'id',
       fields: ['sammendrag', 'brevtekst', 'sted_all', 'kilde'],
       storeFields: [
-        // identities
         'DN_ref','RN_ref','SDN_ID',
-        // text (granular + combined for search)
         'regest','sammendrag_raw','brevtekst',
-        // dates (machine + textual RN/DN)
         'date_start','date_end','date_rn_text','date_dn_text',
-        // places
         'sted_dn','sted_rn','normalized_name','sted_all',
-        // sources / notes
         'kilde','fotnoter','tillegg'
       ],
-      searchOptions: { boost:{ sted_all:4,sammendrag:3,brevtekst:2 }, fuzzy:0.2, prefix:true }
+      searchOptions: { boost:{ sted_all:4, sammendrag:3, brevtekst:2 }, fuzzy:0.2, prefix:true }
     });
 
     await loadChunk(0);
@@ -95,21 +243,17 @@ async function loadRemainingChunks() {
 }
 
 function normalizeLetter(raw, chunkIndex, rowIndex) {
-  // IDs
-  const sdn = raw.SDN_ID || raw.SDNID || raw['\ufeffSDNID'] || raw['﻿SDNID'] || null;
+  const sdn = raw.SDN_ID || raw.SDNID || raw['\ufeffSDNID'] || raw['ï»¿SDNID'] || null;
   const dn  = raw.DN_REF || raw.DN_ref || raw.DNREF || null;
   const rn  = raw.RN_REF || raw.RN_ref || null;
 
-  // Regest + sammendrag: keep separate for display, combine for search.
   const regest           = raw.regest || '';
   const sammendrag_raw   = raw.sammendrag || '';
   const sammendrag_index = [sammendrag_raw, regest].filter(Boolean).join(' | ');
   const brevtekst        = raw.brevtekst || '';
 
-  // Sources (kilde): combine DN/RN for searching/display.
   const kildeCombined = [raw.DN_source, raw.RN_source].filter(Boolean).join(' | ');
 
-  // Dates (machine + textual)
   const date_start  = raw.date_start || null;
   const date_end    = raw.date_end   || null;
   const date_rn_txt = raw.RN_dato    || '';
@@ -117,13 +261,11 @@ function normalizeLetter(raw, chunkIndex, rowIndex) {
   const ORD_START   = dateStrToOrd(date_start, false);
   const ORD_END     = dateStrToOrd(date_end, true) ?? ORD_START;
 
-  // Places
   const sted_dn = raw.DN_sted || '';
   const sted_rn = raw.RN_sted || '';
   const normalized_name = raw.Normalized_name || raw.normalized_name || '';
   const sted_all = [sted_dn, sted_rn, normalized_name].filter(Boolean).join(' | ');
 
-  // Notes / extras
   const fotnoterCombined = [raw.fotnoter_DN, raw.fotnoter_N].filter(Boolean).join('\n');
   const tillegg = raw.Tillegg || raw.tillegg || '';
 
@@ -135,7 +277,6 @@ function normalizeLetter(raw, chunkIndex, rowIndex) {
     RN_ref: rn || undefined,
     SDN_ID: sdn || undefined,
 
-    // Index field (combined) + granular for display
     sammendrag: sammendrag_index,
     sammendrag_raw,
     regest,
@@ -165,22 +306,18 @@ function parseQuery(q) {
     const group = { must: [], not: [], filters: {} };
     const parts = tokenize(g);
     for (const part of parts) {
-      // year:1200..1250
       if (/^year:\d{3,4}\.\.\d{3,4}$/i.test(part)) {
         const [y1,y2] = part.split(':')[1].split('..').map(Number);
         group.filters.fromOrd = dateStrToOrd(String(y1), false);
         group.filters.toOrd   = dateStrToOrd(String(y2), true);
         continue;
       }
-      // before:/after:/on:
       if (/^before:\d{3,4}([\-\.]\d{1,2}([\-\.]\d{1,2})?)?$/i.test(part)) { group.filters.toOrd = dateStrToOrd(part.split(':')[1].replace(/\./g,'-'), true);  continue; }
       if (/^after:\d{3,4}([\-\.]\d{1,2}([\-\.]\d{1,2})?)?$/i.test(part))  { group.filters.fromOrd = dateStrToOrd(part.split(':')[1].replace(/\./g,'-'), false); continue; }
       if (/^on:\d{3,4}([\-\.]\d{1,2}([\-\.]\d{1,2})?)?$/i.test(part))    { const ds=part.split(':')[1].replace(/\./g,'-'); group.filters.fromOrd=dateStrToOrd(ds,false); group.filters.toOrd=dateStrToOrd(ds,true); continue; }
-      // date:FROM..TO or date:SINGLE
       if (/^date:\S+\.\.\S+$/i.test(part)) { const [a,b]=part.split(':')[1].split('..'); group.filters.fromOrd=dateStrToOrd(a.replace(/\./g,'-'),false); group.filters.toOrd=dateStrToOrd(b.replace(/\./g,'-'),true); continue; }
       if (/^date:\d{3,4}([\-\.]\d{1,2}([\-\.]\d{1,2})?)?$/i.test(part)) { const ds=part.split(':')[1].replace(/\./g,'-'); group.filters.fromOrd=dateStrToOrd(ds,false); group.filters.toOrd=dateStrToOrd(ds,true); continue; }
 
-      // generic term
       const m = part.match(/^([a-z_]+):(.*)$/i);
       let field = null, term = part, isPhrase = false, neg = false;
       if (m) { field = m[1].toLowerCase(); term = m[2]; }
@@ -196,8 +333,8 @@ function parseQuery(q) {
   return orGroups;
 }
 
-function tokenize(s) { const out=[]; let buf=''; let inQ=false; for (let i=0;i<s.length;i++){ const ch=s[i]; if(ch==='\"'){ buf+=ch; inQ=!inQ; continue;} if(!inQ && /\s/.test(ch)){ if(buf.trim()) out.push(buf.trim()); buf=''; } else { buf+=ch; } } if(buf.trim()) out.push(buf.trim()); return out; }
-function splitByOr(s){ const out=[]; let buf=''; let inQ=false; for(let i=0;i<s.length;i++){ const ch=s[i]; if(ch==='\"'){ inQ=!inQ; buf+=ch; continue;} if(!inQ && s.slice(i,i+2).toUpperCase()==='OR' && /\s/.test(s[i-1]||' ') && /\s/.test(s[i+2]||' ')){ out.push(buf.trim()); buf=''; i+=1; } else buf+=ch; } if(buf.trim()) out.push(buf.trim()); return out; }
+function tokenize(s) { const out=[]; let buf=''; let inQ=false; for (let i=0;i<s.length;i++){ const ch=s[i]; if(ch==='"'){ buf+=ch; inQ=!inQ; continue;} if(!inQ && /\s/.test(ch)){ if(buf.trim()) out.push(buf.trim()); buf=''; } else { buf+=ch; } } if(buf.trim()) out.push(buf.trim()); return out; }
+function splitByOr(s){ const out=[]; let buf=''; let inQ=false; for(let i=0;i<s.length;i++){ const ch=s[i]; if(ch==='"'){ inQ=!inQ; buf+=ch; continue;} if(!inQ && s.slice(i,i+2).toUpperCase()==='OR' && /\s/.test(s[i-1]||' ') && /\s/.test(s[i+2]||' ')){ out.push(buf.trim()); buf=''; i+=1; } else buf+=ch; } if(buf.trim()) out.push(buf.trim()); return out; }
 function norm(s){ return (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
 
 function fieldListForCheckboxes() {
@@ -253,14 +390,12 @@ function performSearch() {
   const hasDateFilter = (uiFrom != null || uiTo != null);
   const selectedFields = fieldListForCheckboxes();
 
-  let unionMap = new Map(); // id -> score
+  let unionMap = new Map();
 
   if (!qUsable && hasDateFilter) {
-    // Date-only search
     const dummyGroup = { must: [], not: [], filters: { fromOrd: uiFrom, toOrd: uiTo } };
     unionMap = runAndGroup(dummyGroup, selectedFields, uiFrom, uiTo);
   } else if (qUsable) {
-    // Parse query and union OR-groups
     const orGroups = parseQuery(q);
     for (const group of orGroups) {
       const set = runAndGroup(group, selectedFields, uiFrom, uiTo);
@@ -278,7 +413,7 @@ function performSearch() {
   currentResultsAll = Array.from(unionMap.entries())
     .map(([id, score]) => ({ id, score }))
     .sort((a,b) => b.score - a.score)
-    .map(r => Object.assign({}, DOCS.get(r.id) || {}, { score: r.score }));
+    .map(r => Object.assign({}, DOCS.get(r.id) || {}, { score: r.score, query: q }));
 
   currentPage = 1;
   renderPage();
@@ -296,7 +431,6 @@ function renderPage(){
   renderPagination(total);
 }
 
-// AND a single group: terms ∩ …, then NOT, then date intersection (with UI)
 function runAndGroup(group, selectedFields, uiFromOrd=null, uiToOrd=null){
   const mustSets=[];
   for(const term of group.must){
@@ -368,6 +502,9 @@ function updateResults(results, from=0, to=0, total=0){
   if(!container) return;
   if(!results || !results.length){ container.innerHTML='<p>Ingen treff</p>'; return; }
 
+  const query = results[0]?.query || '';
+  const queryTokens = tokenizeCanonical(query);
+
   const html = `
     <p class="result-count">Viser ${from}–${to} av ${total} treff</p>
     <div class="result-list">
@@ -375,7 +512,17 @@ function updateResults(results, from=0, to=0, total=0){
         const bestDate = r.date_rn_text?.trim() || r.date_dn_text?.trim() || formatDateRange(r.date_start, r.date_end);
         const archaic = dnToArchaic(r.DN_ref);
         const stedBest = r.normalized_name || r.sted_dn || r.sted_rn || 'Ukjent sted';
-        const regestPreview = (r.regest && r.regest.trim()) ? snippet(r.regest, 220) : (r.sammendrag_raw ? snippet(r.sammendrag_raw, 220) : '');
+        
+        // Use fuzzy or exact highlighting based on mode
+        const regestPreview = r.regest?.trim() ? 
+          (searchMode === 'fuzzy' ? 
+            snippet(highlightFuzzy(r.regest, queryTokens, fuzzyDistance), 220, true) : 
+            snippet(highlightExact(r.regest, query), 220, true)) : 
+          (r.sammendrag_raw ? 
+            (searchMode === 'fuzzy' ? 
+              snippet(highlightFuzzy(r.sammendrag_raw, queryTokens, fuzzyDistance), 220, true) : 
+              snippet(highlightExact(r.sammendrag_raw, query), 220, true)) : '');
+        
         return `
         <div class="search-result" data-id="${r.id}">
           <div class="idline">
@@ -384,7 +531,7 @@ function updateResults(results, from=0, to=0, total=0){
           </div>
           <h3><button class="toggle-details" aria-expanded="false">Vis fulltekst</button></h3>
           <p class="meta">${escapeHtml(bestDate)} – ${escapeHtml(stedBest)}</p>
-          ${regestPreview ? `<p class="summary"><em>${escapeHtml(regestPreview)}</em></p>` : ''}
+          ${regestPreview ? `<p class="summary"><em>${regestPreview}</em></p>` : ''}
           <div class="details" style="display:none;">
             <p>
               <strong>Regest dato:</strong> ${escapeHtml(r.date_rn_text || '—')}
@@ -399,17 +546,25 @@ function updateResults(results, from=0, to=0, total=0){
               <strong>date_start:</strong> ${escapeHtml(r.date_start || '')}
               &nbsp;&nbsp;<strong>date_end:</strong> ${escapeHtml(r.date_end || '')}
             </p>
-            ${section('Regest',       r.regest,         'regest')}
-            ${section('Sammendrag',   r.sammendrag_raw, 'sammendrag')}
-            ${section('Brevtekst',    r.brevtekst,      'brevtekst')}
-            ${section('Kilde (DN/RN)',r.kilde,          'kilde')}
-            ${section('Fotnoter',     r.fotnoter,       'fotnoter')}
-            ${section('Tillegg',      r.tillegg,        'tillegg')}
+            ${section('Regest', r.regest, queryTokens, query)}
+            ${section('Sammendrag', r.sammendrag_raw, queryTokens, query)}
+            ${section('Brevtekst', r.brevtekst, queryTokens, query)}
+            ${section('Kilde (DN/RN)', r.kilde, queryTokens, query)}
+            ${section('Fotnoter', r.fotnoter, queryTokens, query)}
+            ${section('Tillegg', r.tillegg, queryTokens, query)}
           </div>
         </div>`;
       }).join('')}
     </div>`;
   container.innerHTML = html;
+}
+
+function section(label, content, queryTokens, query) {
+  if (!content || !String(content).trim()) return '';
+  const highlighted = searchMode === 'fuzzy' ? 
+    highlightFuzzy(String(content), queryTokens, fuzzyDistance) : 
+    highlightExact(String(content), query);
+  return `<span class="section-label">${escapeHtml(label)}</span><div class="${label.toLowerCase().replace(/[^a-z]/g, '')}">${highlighted}</div>`;
 }
 
 function renderPagination(total){
@@ -438,8 +593,6 @@ function paginationWindow(curr,total,spread=2){
 }
 
 // =============== Event wiring ===============
-function section(label,content,cls){ if(!content || !String(content).trim()) return ''; return `<span class="section-label">${escapeHtml(label)}</span><div class="${cls}">${escapeHtml(String(content))}</div>`; }
-
 function wireListeners(){
   const input=document.getElementById('search-input');
   const button=document.getElementById('search-btn');
@@ -447,6 +600,31 @@ function wireListeners(){
   if(input){ input.addEventListener('input',debounced); input.addEventListener('keydown',e=>{ if(e.key==='Enter') performSearch(); }); }
   if(button) button.addEventListener('click', performSearch);
   document.querySelectorAll('.search-filters input').forEach(cb=>cb.addEventListener('change', performSearch));
+
+  // Search mode controls
+  const modeSelect = document.getElementById('search-mode');
+  const fuzzyBlock = document.getElementById('fuzzy-controls');
+  const fuzzySlider = document.getElementById('fuzzy-distance');
+  
+  if (modeSelect) {
+    modeSelect.addEventListener('change', () => {
+      searchMode = modeSelect.value;
+      if (fuzzyBlock) fuzzyBlock.style.display = searchMode === 'fuzzy' ? 'flex' : 'none';
+      performSearch();
+    });
+  }
+  
+  if (fuzzySlider) {
+    fuzzySlider.addEventListener('input', () => {
+      fuzzyDistance = parseInt(fuzzySlider.value, 10);
+      const label = document.getElementById('fuzzy-label');
+      if (label) {
+        const labels = ['Streng', 'Moderat', 'Avslappet', 'Veldig avslappet'];
+        label.textContent = labels[fuzzyDistance] || 'Moderat';
+      }
+      performSearch();
+    });
+  }
 
   // Date fields
   const df=document.getElementById('date-from');
@@ -511,7 +689,7 @@ function toTXT_likeDetails(rows){
     ].filter(Boolean).join(' | ');
     const bits=[
       `${headL}    ${headR}`,
-      `${dateLine}${placeBits ? ' — ' + placeBits : ''}`,
+      `${dateLine}${placeBits ? ' – ' + placeBits : ''}`,
       `Regest dato: ${r.date_rn_text||'—'}    Diplomatarium dato: ${r.date_dn_text||'—'}`,
       `date_start: ${r.date_start||''}    date_end: ${r.date_end||''}`
     ];
@@ -556,4 +734,34 @@ function escapeHtml(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,
 function dnToArchaic(dn){ if(!dn) return ''; const m=String(dn).match(/^DN(\d{3})(\d{5})$/i); if(!m) return ''; const vol=parseInt(m[1],10), num=parseInt(m[2],10); return `Diplomatarium Norvegicum ${toRoman(vol)}, ${num}`; }
 function toRoman(num){ if(!Number.isFinite(num)||num<=0) return ''; const map=[[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],[50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']]; let out=''; for(const [v,s] of map){ while(num>=v){ out+=s; num-=v; } } return out; }
 function downloadText(text,filename,opts={}){ const parts=[]; if(opts.addBOM) parts.push('\uFEFF'); parts.push(text); const blob=new Blob(parts,{type:'text/plain;charset=utf-8'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); },0); }
-function snippet(t, n){ const s=String(t||'').trim(); if(!s) return ''; return s.length<=n ? s : s.slice(0,n).replace(/\s+\S*$/,'') + '…'; }
+function snippet(t, n, isHtml=false){ 
+  if (isHtml) {
+    // For HTML content, strip tags first to count actual characters
+    const temp = document.createElement('div');
+    temp.innerHTML = t;
+    const text = temp.textContent || temp.innerText || '';
+    if (text.length <= n) return t;
+    // Find a good break point in the original HTML
+    let charCount = 0;
+    const parts = t.split(/(<[^>]+>)/);
+    let result = '';
+    for (const part of parts) {
+      if (part.startsWith('<')) {
+        result += part;
+      } else {
+        if (charCount + part.length <= n) {
+          result += part;
+          charCount += part.length;
+        } else {
+          const remaining = n - charCount;
+          result += part.slice(0, remaining).replace(/\s+\S*$/, '');
+          break;
+        }
+      }
+    }
+    return result + '…';
+  }
+  const s=String(t||'').trim(); 
+  if(!s) return ''; 
+  return s.length<=n ? s : s.slice(0,n).replace(/\s+\S*$/,'') + '…'; 
+}

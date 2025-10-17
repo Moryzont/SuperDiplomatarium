@@ -12,6 +12,20 @@ permalink: /sok/
     <button id="search-btn" class="btn btn-primary">Søk</button>
   </div>
 
+  <div class="search-mode-row">
+    <label for="search-mode" class="mode-label">Søkemodus:</label>
+    <select id="search-mode" class="mode-select">
+      <option value="fuzzy">Uskarpt søk (fuzzy)</option>
+      <option value="exact">Eksakt søk</option>
+    </select>
+    
+    <div id="fuzzy-controls" class="fuzzy-controls">
+      <label for="fuzzy-distance">Fuzzy-nivå:</label>
+      <input type="range" id="fuzzy-distance" min="0" max="3" value="1" step="1">
+      <span id="fuzzy-label" class="fuzzy-label">Moderat</span>
+    </div>
+  </div>
+
   <div class="search-filters">
     <label><input type="checkbox" id="search-sammendrag" checked> Sammendrag</label>
     <label><input type="checkbox" id="search-brevtekst" checked> Brevtekst</label>
@@ -33,7 +47,7 @@ permalink: /sok/
   </div>
 
   <div id="export-bar" class="export-bar" style="display:none;">
-    <div class="export-left"><strong>Eksportér treff:</strong></div>
+    <div class="export-left"><strong>Exportér treff:</strong></div>
     <div class="export-right">
       <button id="export-txt" class="btn btn-ghost" disabled>Last ned TXT</button>
       <button id="export-csv" class="btn btn-ghost" disabled>Last ned CSV</button>
