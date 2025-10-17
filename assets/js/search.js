@@ -1,13 +1,17 @@
 /* global document, window, fetch */
 
 /**
- * SuperDiplomatarium — Search (date-index only)
- * - No text indexing at all (prevents crashes).
- * - Keeps a compact index on dates for fast filtering.
- * - Text search (exact/fuzzy) is linear over the date-filtered subset.
+ * SuperDiplomatarium — Browser-safe search (DATE INDEX ONLY)
+ *
+ * - No text indexing (no MiniSearch / n-grams).
+ * - Tiny in-memory date index for fast range filtering.
+ * - Progressive, cancelable scanning in batches with yield pauses.
+ * - Fuzzy matcher is lightweight and bounded.
+ * - Default search fields = sammendrag+regest (combined into "sammendrag").
+ * - Users may select ANY number of fields (no cap on number of fields).
  */
 
-// =============== Globals ===============
+// ===================== Globals =====================
 let allLetters = [];
 let DOCS = new Map();
 
@@ -15,22 +19,39 @@ let chunksLoaded = 0;
 let totalChunks = 0;
 let debounceTimer = null;
 
-let CHUNK_SIZE = 1000; // from metadata if present (not critical but kept)
+// Date index (only index we keep)
+let DATE_RECORDS = [];   // { start, end, id }
+let DATE_SORTED = false;
 
-let DISTANCE_CACHE = new Map();
-const MAX_CACHE_SIZE = 10000;
-
+// Search state
 let currentResultsAll = [];
 let currentResultsShown = [];
 let currentPage = 1;
-const PAGE_SIZE = 50;
+let activeSearchSeq = 0;       // used to cancel previous searches
+
+// Tunables (kept conservative to protect the browser)
+const PAGE_SIZE = 20;          // smaller page to keep DOM light
+const BATCH_SIZE = 120;        // docs processed per batch before yielding
+const YIELD_EVERY = 6;         // yield after this many batches
+const MAX_FIELD_CHARS = {      // cap scanned characters per field per doc (safety)
+  brevtekst: 30000,
+  sammendrag: 12000,
+  regest: 15000,
+  sted_all: 5000,
+  kilde: 8000
+};
+const MAX_TOKENS_PER_FIELD = 2500; // cap tokens extracted per field
+const MAX_SECTION_CHARS = {    // cap rendered characters in details
+  brevtekst: 8000,
+  default: 6000
+};
 
 let searchMode = 'fuzzy';
 let fuzzyDistance = 1;
 
-// Date index (only index we keep)
-let DATE_RECORDS = [];   // { start, end, id }
-let DATE_SORTED = false;
+// Small distance cache to avoid repeated work, auto-purged regularly
+let DISTANCE_CACHE = new Map();
+const MAX_CACHE_SIZE = 6000;
 
 document.addEventListener('DOMContentLoaded', async () => {
   await initializeSearch();
@@ -43,17 +64,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 function BASE() { return (window.SITE_BASE || '').replace(/\/+$/, ''); }
 function updateStatus(msg) { const el = document.getElementById('search-status'); if (el) el.textContent = msg; }
 
-// =============== Fuzzy matching utils (unchanged core) ===============
-function normalizeForScoring(s) { 
-  return (s || '').toLowerCase().replace(/-\s*/g, ''); 
+// ===================== Light fuzzy tools =====================
+function normalizeForScoring(s) {
+  return (s || '').toLowerCase().replace(/-\s*/g, '');
 }
-function tokenizeCanonical(s) { 
-  const joined = normalizeForScoring(s); 
-  return joined.match(/[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+/gi) || []; 
+function tokenizeCanonical(s, cap = MAX_TOKENS_PER_FIELD) {
+  const joined = normalizeForScoring(s);
+  const rx = /[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+/gi;
+  const out = [];
+  let m;
+  while ((m = rx.exec(joined)) && out.length < cap) out.push(m[0]);
+  return out;
 }
 function bigramsOf(s) {
   const out = [];
-  for (let i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2));
+  for (let i = 0; i < s.length - 1; i++) out.push(s.slice(0, i + 2));
   return out;
 }
 function diceCoeff(a, b) {
@@ -111,14 +136,19 @@ function weightedEdit(a, b, maxCostHint) {
 
 function getCachedDistance(a, b) {
   const key = `${a}|${b}`;
-  if (DISTANCE_CACHE.has(key)) return DISTANCE_CACHE.get(key);
+  const hit = DISTANCE_CACHE.get(key);
+  if (hit !== undefined) return hit;
+
   const q = a.toLowerCase(), w = b.toLowerCase();
-  if (q === w) { DISTANCE_CACHE.set(key, 0); return 0; }
-  if (w.startsWith(q) || q.startsWith(w)) { DISTANCE_CACHE.set(key, 0.1); return 0.1; }
-  const maxLen = Math.max(q.length, w.length);
-  const we = weightedEdit(q, w, Math.ceil(maxLen * 0.5)) / maxLen;
-  const dice = 1 - diceCoeff(bigramsOf(q), bigramsOf(w));
-  const dist = 0.7 * we + 0.3 * dice;
+  let dist;
+  if (q === w) dist = 0;
+  else if (w.startsWith(q) || q.startsWith(w)) dist = 0.1;
+  else {
+    const maxLen = Math.max(q.length, w.length);
+    const we = weightedEdit(q, w, Math.ceil(maxLen * 0.5)) / maxLen;
+    const dice = 1 - diceCoeff(bigramsOf(q), bigramsOf(w));
+    dist = 0.7 * we + 0.3 * dice;
+  }
   if (DISTANCE_CACHE.size > MAX_CACHE_SIZE) DISTANCE_CACHE.clear();
   DISTANCE_CACHE.set(key, dist);
   return dist;
@@ -129,7 +159,7 @@ function thresholdFor(dist) {
   return [0.28, 0.34, 0.42, 0.50][d];
 }
 
-// =============== Date index helpers ===============
+// ===================== Date index helpers =====================
 function addToDateIndex(doc) {
   if (doc.ORD_START != null) {
     DATE_RECORDS.push({
@@ -173,7 +203,7 @@ function getDocsByDateRange(fromOrd, toOrd) {
   return out;
 }
 
-// =============== Init + Loading ===============
+// ===================== Init + Loading =====================
 async function initializeSearch() {
   updateStatus('Laster inn brevsamlingen…');
   try {
@@ -182,11 +212,11 @@ async function initializeSearch() {
     if (!metaResponse.ok) throw new Error(`HTTP ${metaResponse.status} on ${metaUrl}`);
     const metadata = await metaResponse.json();
     totalChunks = metadata.chunks;
-    CHUNK_SIZE = Number(metadata.chunk_size) || CHUNK_SIZE;
 
     await loadChunk(0);
     updateStatus(`Lastet 1 av ${totalChunks} deler…`);
-    // Run an initial (empty) search to clear UI state quickly
+
+    // Kick an initial empty search to clear UI fast
     setTimeout(() => performSearch(), 0);
 
     loadRemainingChunks();
@@ -204,10 +234,7 @@ async function loadChunk(i) {
 
   const docs = raw.map((row, k) => normalizeLetter(row, i, k));
   allLetters.push(...docs);
-  for (const d of docs) {
-    DOCS.set(d.id, d);
-    addToDateIndex(d); // only index dates
-  }
+  for (const d of docs) { DOCS.set(d.id, d); addToDateIndex(d); }
 
   chunksLoaded++;
   updateStatus(`Lastet ${chunksLoaded} av ${totalChunks} deler…`);
@@ -217,8 +244,7 @@ async function loadRemainingChunks() {
   for (let i = 1; i < totalChunks; i++) {
     try {
       await loadChunk(i);
-      // (Optional) Refresh results occasionally as more data arrives
-      if (i % 3 === 0) performSearch();
+      if (i % 4 === 0) performSearch();
     } catch (e) {
       console.error(`Del ${i} feilet:`, e);
     }
@@ -226,7 +252,7 @@ async function loadRemainingChunks() {
   updateStatus(`${allLetters.length} brev lastet og klare for søk!`);
 }
 
-// =============== Normalization ===============
+// ===================== Normalization =====================
 function normalizeLetter(raw, chunkIndex, rowIndex) {
   const sdn  = raw.SDN_ID || raw.SDNID || raw['\ufeffSDNID'] || raw['ï»¿SDNID'] || raw.SD_ID || null;
   const dn   = raw.DN_REF || raw.DN_ref || raw.DNREF || null;
@@ -234,6 +260,7 @@ function normalizeLetter(raw, chunkIndex, rowIndex) {
 
   const regest           = raw.regest || '';
   const sammendrag_raw   = raw.sammendrag || '';
+  // "sammendrag" FIELD = sammendrag + regest (basic default search field)
   const sammendrag_index = [sammendrag_raw, regest].filter(Boolean).join(' | ');
   const brevtekst        = raw.brevtekst || '';
 
@@ -261,7 +288,7 @@ function normalizeLetter(raw, chunkIndex, rowIndex) {
     DN_ref: dn || undefined,
     RN_ref: rn || undefined,
     SDN_ID: sdn || undefined,
-    sammendrag: sammendrag_index,
+    sammendrag: sammendrag_index,   // <- combined
     sammendrag_raw,
     regest,
     brevtekst,
@@ -278,43 +305,43 @@ function normalizeLetter(raw, chunkIndex, rowIndex) {
   };
 }
 
-// =============== Date helpers ===============
+// ===================== Date helpers =====================
 function dateStrToOrd(s, endSide){
   if (!s) return null;
   const str = String(s).trim();
-  
+
   let m = str.match(/^(\d{3,4})-(\d{1,2})-(\d{1,2})$/);
-  if (m) { 
-    const y = clampYear(parseInt(m[1], 10)); 
-    const mo = clampMonth(parseInt(m[2], 10)); 
-    const d = clampDay(y, mo, parseInt(m[3], 10)); 
-    return y * 10000 + mo * 100 + d; 
+  if (m) {
+    const y = clampYear(parseInt(m[1], 10));
+    const mo = clampMonth(parseInt(m[2], 10));
+    const d = clampDay(y, mo, parseInt(m[3], 10));
+    return y * 10000 + mo * 100 + d;
   }
-  
+
   m = str.match(/^(\d{3,4})-(\d{1,2})$/);
-  if (m) { 
-    const y = clampYear(parseInt(m[1], 10)); 
-    const mo = clampMonth(parseInt(m[2], 10)); 
-    const d = endSide ? daysInMonth(y, mo) : 1; 
-    return y * 10000 + mo * 100 + d; 
+  if (m) {
+    const y = clampYear(parseInt(m[1], 10));
+    const mo = clampMonth(parseInt(m[2], 10));
+    const d = endSide ? daysInMonth(y, mo) : 1;
+    return y * 10000 + mo * 100 + d;
   }
-  
+
   m = str.match(/^(\d{3,4})$/);
-  if (m) { 
-    const y = clampYear(parseInt(m[1], 10)); 
-    const mo = endSide ? 12 : 1; 
-    const d = endSide ? 31 : 1; 
-    return y * 10000 + mo * 100 + d; 
+  if (m) {
+    const y = clampYear(parseInt(m[1], 10));
+    const mo = endSide ? 12 : 1;
+    const d = endSide ? 31 : 1;
+    return y * 10000 + mo * 100 + d;
   }
-  
-  const alt = str.replace(/\./g, '-'); 
+
+  const alt = str.replace(/\./g, '-');
   if (alt !== str) return dateStrToOrd(alt, endSide);
-  
+
   return null;
 }
-function daysInMonth(y, m){ 
-  if(m === 2) return (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)) ? 29 : 28; 
-  return [4, 6, 9, 11].includes(m) ? 30 : 31; 
+function daysInMonth(y, m){
+  if(m === 2) return (y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0)) ? 29 : 28;
+  return [4, 6, 9, 11].includes(m) ? 30 : 31;
 }
 function clampYear(y){ return Math.min(Math.max(y, 1), 9999); }
 function clampMonth(m){ return Math.min(Math.max(m, 1), 12); }
@@ -337,91 +364,63 @@ function readUIRangeOrd(){
   return { fromOrd, toOrd };
 }
 
+// Default: ONLY sammendrag+regest (combined as "sammendrag").
+// Users can check any number of fields; we do not cap the number of fields.
 function fieldListForCheckboxes() {
   const fields = [];
   if (document.getElementById('search-sammendrag')?.checked) fields.push('sammendrag');
   if (document.getElementById('search-brevtekst')?.checked)  fields.push('brevtekst');
   if (document.getElementById('search-sted')?.checked)       fields.push('sted_all');
   if (document.getElementById('search-kilde')?.checked)      fields.push('kilde');
-  return fields.length ? fields : ['sammendrag', 'brevtekst', 'sted_all', 'kilde'];
+  // BASIC DEFAULT = sammendrag (includes regest)
+  return fields.length ? fields : ['sammendrag'];
 }
 
-// =============== Search Execution (no text indexing) ===============
-function performSearch() {
-  const q = (document.getElementById('search-input')?.value || '').trim();
-  const { fromOrd: uiFrom, toOrd: uiTo } = readUIRangeOrd();
-  const hasDateFilter = (uiFrom != null || uiTo != null);
-  const selectedFields = fieldListForCheckboxes();
-
-  const modeEl = document.getElementById('search-mode');
-  if (modeEl) searchMode = modeEl.value;
-  
-  const fuzzyEl = document.getElementById('fuzzy-distance');
-  if (fuzzyEl) fuzzyDistance = parseInt(fuzzyEl.value, 10);
-
-  let results = [];
-  const startTime = performance.now();
-
-  // Fast path: nothing to search and no date range
-  if (!q && !hasDateFilter) {
-    currentResultsAll = [];
-    currentPage = 1;
-    updateResults([]);
-    renderPagination(0);
-    setExportEnabled(false);
-    return;
-  }
-
-  // Preselect docs by date using the date index (fast)
-  const dateSubset = getDocsByDateRange(uiFrom, uiTo);
-
-  if (!q) {
-    results = dateSubset;
-  } else if (searchMode === 'exact') {
-    const needle = q.toLowerCase();
-    results = dateSubset.filter(doc => {
-      for (const f of selectedFields) {
-        const hay = String(doc[f] || '').toLowerCase();
-        if (hay.includes(needle)) return true;
-      }
-      return false;
-    });
-  } else {
-    // Fuzzy scan over the date subset only
-    const queryTokens = tokenizeCanonical(q);
-    const threshold = thresholdFor(fuzzyDistance);
-    results = dateSubset.filter(doc => docMatchesFuzzy_NoIndex(doc, queryTokens, selectedFields, threshold));
-  }
-
-  const elapsed = (performance.now() - startTime).toFixed(1);
-  console.log(`Search over ${dateSubset.length} docs => ${results.length} results in ${elapsed}ms`);
-
-  currentResultsAll = results.map(r => Object.assign({}, r, { query: q }));
-  currentPage = 1;
-  renderPage();
-  setExportEnabled(currentResultsAll.length > 0);
+// ===================== Progressive Search =====================
+function clampTextForSearch(doc, field) {
+  const raw = String(doc[field] || '');
+  const cap = MAX_FIELD_CHARS[field] ?? 8000;
+  return raw.length > cap ? raw.slice(0, cap) : raw;
 }
 
-function docMatchesFuzzy_NoIndex(doc, queryTokens, fields, threshold) {
+function docMatchesExact(doc, needle, fields) {
+  for (const f of fields) {
+    const hay = clampTextForSearch(doc, f).toLowerCase();
+    if (hay && hay.includes(needle)) return true;
+  }
+  return false;
+}
+
+function docMatchesFuzzy(doc, queryTokens, fields, threshold) {
   if (queryTokens.length === 0) return true;
 
   for (const field of fields) {
-    const text = normalizeForScoring(doc[field] || '');
-    const docTokens = tokenizeCanonical(text);
-    let allMatch = true;
+    const text = normalizeForScoring(clampTextForSearch(doc, field));
+    if (!text) continue;
 
+    const docTokens = tokenizeCanonical(text);
+    if (!docTokens.length) continue;
+
+    let allMatch = true;
     for (const qToken of queryTokens) {
+      // ignore super-short tokens for fuzzy (reduce work/noise)
+      if (qToken.length < 3) {
+        if (!text.includes(qToken)) { allMatch = false; break; }
+        continue;
+      }
+
       let foundMatch = false;
 
-      // hyphen-combo check
-      for (let i = 0; i < docTokens.length - 1; i++) {
+      // check adjacent hyphen-like combos
+      for (let i = 0; i < docTokens.length - 1 && !foundMatch; i++) {
         const combined = docTokens[i] + docTokens[i + 1];
-        if (getCachedDistance(qToken, combined) <= threshold) { foundMatch = true; break; }
+        if (getCachedDistance(qToken, combined) <= threshold) foundMatch = true;
       }
+      // token by token
       if (!foundMatch) {
         for (const dToken of docTokens) {
           const lenDiff = Math.abs(qToken.length - dToken.length);
-          if (lenDiff > qToken.length * 0.5) continue;
+          if (lenDiff > Math.ceil(qToken.length * 0.6)) continue; // early length guard
           if (getCachedDistance(qToken, dToken) <= threshold) { foundMatch = true; break; }
         }
       }
@@ -432,7 +431,102 @@ function docMatchesFuzzy_NoIndex(doc, queryTokens, fields, threshold) {
   return false;
 }
 
-// =============== Pagination ===============
+// Yield control to the browser to keep UI responsive
+function yieldToBrowser() {
+  return new Promise(resolve => {
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(() => resolve(), { timeout: 50 });
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+}
+
+async function performSearch() {
+  const seq = ++activeSearchSeq; // cancel token
+  const qRaw = (document.getElementById('search-input')?.value || '').trim();
+  const { fromOrd: uiFrom, toOrd: uiTo } = readUIRangeOrd();
+  const hasDateFilter = (uiFrom != null || uiTo != null);
+  const selectedFields = fieldListForCheckboxes();
+
+  const modeEl = document.getElementById('search-mode');
+  if (modeEl) searchMode = modeEl.value;
+
+  const fuzzyEl = document.getElementById('fuzzy-distance');
+  if (fuzzyEl) fuzzyDistance = parseInt(fuzzyEl.value, 10);
+
+  const needle = qRaw.toLowerCase();
+  const queryTokens = tokenizeCanonical(qRaw).filter(t => t.length); // for fuzzy
+
+  // Fast path: nothing to search and no date range
+  if (!needle && !hasDateFilter) {
+    currentResultsAll = [];
+    currentPage = 1;
+    updateResults([]);
+    renderPagination(0);
+    setExportEnabled(false);
+    updateStatus('Skriv for å søke, eller velg dato.');
+    return;
+  }
+
+  // Preselect docs by date using the date index (fast)
+  const dateSubset = getDocsByDateRange(uiFrom, uiTo);
+  const total = dateSubset.length;
+  currentResultsAll = [];
+  currentPage = 1;
+  updateResults([], 0, 0, 0);
+  renderPagination(0);
+  setExportEnabled(false);
+  updateStatus(`Søker… 0/${total}`);
+
+  const threshold = thresholdFor(fuzzyDistance);
+  const doExact = (!needle) ? false : (searchMode === 'exact' || needle.length < 3);
+
+  const startTime = performance.now();
+  let processed = 0;
+  let batchCount = 0;
+
+  // Progressive, cancelable loop
+  for (let i = 0; i < total; i += BATCH_SIZE) {
+    if (seq !== activeSearchSeq) return; // canceled by a newer search
+
+    const batch = dateSubset.slice(i, i + BATCH_SIZE);
+    for (const doc of batch) {
+      let match = false;
+
+      if (!needle) {
+        match = true; // date-only search
+      } else if (doExact) {
+        match = docMatchesExact(doc, needle, selectedFields);
+      } else {
+        match = docMatchesFuzzy(doc, queryTokens, selectedFields, threshold);
+      }
+
+      if (match) currentResultsAll.push(Object.assign({}, doc, { query: qRaw }));
+    }
+
+    processed += batch.length;
+    batchCount++;
+    updateStatus(`Søker… ${processed}/${total}`);
+
+    if (processed === batch.length || (batchCount % 2 === 0)) {
+      renderPage();
+      setExportEnabled(currentResultsAll.length > 0);
+    }
+
+    if (batchCount % YIELD_EVERY === 0) {
+      await yieldToBrowser();
+      if (seq !== activeSearchSeq) return; // canceled
+    }
+  }
+
+  const elapsed = (performance.now() - startTime).toFixed(0);
+  updateStatus(`Ferdig: ${currentResultsAll.length} treff (gjennomgikk ${total} på ${elapsed} ms)`);
+  renderPage();
+  setExportEnabled(currentResultsAll.length > 0);
+}
+
+// ===================== Pagination =====================
 function renderPage(){
   const total = currentResultsAll.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -444,22 +538,27 @@ function renderPage(){
   renderPagination(total);
 }
 
-// =============== Highlighting ===============
+// ===================== Highlighting (bounded) =====================
 function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-function escapeHtml(s){ 
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); 
+function escapeHtml(s){
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function highlightExact(text, query) {
   if (!query) return escapeHtml(text);
-  const escaped = escapeHtml(text);
+  const clipped = text.length > MAX_SECTION_CHARS.default ? text.slice(0, MAX_SECTION_CHARS.default) + '…' : text;
+  const escaped = escapeHtml(clipped);
   const rx = new RegExp(escapeRegex(query), 'gi');
   return escaped.replace(rx, '<mark>$&</mark>');
 }
 
 function markHyphenPairs(text, shouldMarkCombined) {
+  const clipped = text.length > MAX_SECTION_CHARS.default ? text.slice(0, MAX_SECTION_CHARS.default) + '…' : text;
   const rx = /([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)-(\s+)([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)/gi;
-  return (text || '').replace(rx, (m, a, ws, b) => 
+  return (clipped || '').replace(rx, (m, a, ws, b) =>
     shouldMarkCombined((a + b).toLowerCase()) ? '<mark>' + a + '-' + ws + b + '</mark>' : m
   );
 }
@@ -470,17 +569,22 @@ function highlightOutsideMarks(html, highlighterFn) {
 function highlightFuzzy(text, queryTokens, fuzzyDistSetting) {
   if (queryTokens.length === 0) return escapeHtml(text);
   const th = thresholdFor(fuzzyDistSetting);
-  
-  const withPairs = markHyphenPairs(text, (joined) => {
-    for (const q of queryTokens) if (getCachedDistance(q, joined) <= th) return true;
+
+  // clip aggressively to keep DOM and CPU sane
+  const limit = MAX_SECTION_CHARS.default;
+  const clipped = text.length > limit ? text.slice(0, limit) + '…' : text;
+
+  const withPairs = markHyphenPairs(clipped, (joined) => {
+    for (const q of queryTokens) if (q.length >= 3 && getCachedDistance(q, joined) <= th) return true;
     return false;
   });
-  
+
   const tokenRx = /[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß\-]+/gi;
   return highlightOutsideMarks(escapeHtml(withPairs), (frag) => {
     return frag.replace(tokenRx, (m) => {
       let best = Infinity;
       for (const q of queryTokens) {
+        if (q.length < 3) continue;
         const d = getCachedDistance(q, m.toLowerCase());
         if (d < best) best = d;
         if (best === 0) break;
@@ -490,13 +594,13 @@ function highlightFuzzy(text, queryTokens, fuzzyDistSetting) {
   });
 }
 
-// =============== Rendering ===============
+// ===================== Rendering =====================
 function updateResults(results, from = 0, to = 0, total = 0){
   const container = document.getElementById('search-results');
   if (!container) return;
-  if (!results || !results.length) { 
-    container.innerHTML = '<p>Ingen treff</p>'; 
-    return; 
+  if (!results || !results.length) {
+    container.innerHTML = '<p>Ingen treff</p>';
+    return;
   }
 
   const query = results[0]?.query || '';
@@ -509,12 +613,13 @@ function updateResults(results, from = 0, to = 0, total = 0){
         const bestDate = r.date_rn_text?.trim() || r.date_dn_text?.trim() || formatDateRange(r.date_start, r.date_end);
         const archaic = dnToArchaic(r.DN_ref);
         const stedBest = r.normalized_name || r.sted_dn || r.sted_rn || 'Ukjent sted';
-        
-        const regestPreview = r.regest?.trim() ? 
-          snippet(searchMode === 'fuzzy' ? highlightFuzzy(r.regest, queryTokens, fuzzyDistance) : highlightExact(r.regest, query), 220, true) : 
-          (r.sammendrag_raw ? 
-            snippet(searchMode === 'fuzzy' ? highlightFuzzy(r.sammendrag_raw, queryTokens, fuzzyDistance) : highlightExact(r.sammendrag_raw, query), 220, true) : '');
-        
+
+        const regestPreview = r.regest?.trim()
+          ? snippet(searchMode === 'fuzzy' ? highlightFuzzy(r.regest, queryTokens, fuzzyDistance) : highlightExact(r.regest, query), 220, true)
+          : (r.sammendrag_raw
+              ? snippet(searchMode === 'fuzzy' ? highlightFuzzy(r.sammendrag_raw, queryTokens, fuzzyDistance) : highlightExact(r.sammendrag_raw, query), 220, true)
+              : '');
+
         return `
         <div class="search-result" data-id="${r.id}">
           <div class="idline">
@@ -549,21 +654,31 @@ function updateResults(results, from = 0, to = 0, total = 0){
 
 function section(label, content, queryTokens, query) {
   if (!content || !String(content).trim()) return '';
-  const highlighted = searchMode === 'fuzzy' ? 
-    highlightFuzzy(String(content), queryTokens, fuzzyDistance) : 
-    highlightExact(String(content), query);
-  return `<span class="section-label">${escapeHtml(label)}</span><div class="${label.toLowerCase().replace(/[^a-z]/g, '')}">${highlighted}</div>`;
+  let html;
+  if (label === 'Brevtekst') {
+    // For very large fields, avoid expensive highlighting and huge DOM
+    const limit = MAX_SECTION_CHARS.brevtekst;
+    const clipped = String(content).slice(0, limit);
+    const tail = String(content).length > limit ? '…' : '';
+    html = `<pre class="brevtekst-plain">${escapeHtml(clipped)}${tail}</pre>`;
+  } else {
+    const highlighted = searchMode === 'fuzzy'
+      ? highlightFuzzy(String(content), queryTokens, fuzzyDistance)
+      : highlightExact(String(content), query);
+    html = `<div class="${label.toLowerCase().replace(/[^a-z]/g, '')}">${highlighted}</div>`;
+  }
+  return `<span class="section-label">${escapeHtml(label)}</span>${html}`;
 }
 
 function renderPagination(total){
-  const bar = document.getElementById('results-pagination'); 
+  const bar = document.getElementById('results-pagination');
   if (!bar) return;
-  if (!total) { 
-    bar.style.display = 'none'; 
-    bar.innerHTML = ''; 
-    return; 
+  if (!total) {
+    bar.style.display = 'none';
+    bar.innerHTML = '';
+    return;
   }
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE)); 
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   bar.style.display = 'flex';
   const nums = paginationWindow(currentPage, totalPages, 2);
   const btn = (label, page, disabled = false, cls = '') => `<button class="page-btn ${cls}" data-page="${page}"${disabled ? ' disabled' : ''}>${label}</button>`;
@@ -579,41 +694,41 @@ function renderPagination(total){
 }
 
 function paginationWindow(curr, total, spread = 2){
-  const out = []; 
+  const out = [];
   const add = x => { if (!out.includes(x)) out.push(x); };
-  add(1); 
-  for (let i = curr - spread; i <= curr + spread; i++) if (i > 1 && i < total) add(i); 
+  add(1);
+  for (let i = curr - spread; i <= curr + spread; i++) if (i > 1 && i < total) add(i);
   if (total > 1) add(total);
   out.sort((a, b) => a - b);
-  const withDots = []; 
-  for (let i = 0; i < out.length; i++) { 
-    withDots.push(out[i]); 
-    if (i < out.length - 1 && out[i + 1] - out[i] > 1) withDots.push('…'); 
+  const withDots = [];
+  for (let i = 0; i < out.length; i++) {
+    withDots.push(out[i]);
+    if (i < out.length - 1 && out[i + 1] - out[i] > 1) withDots.push('…');
   }
   return withDots;
 }
 
-// =============== Event wiring ===============
+// ===================== Events =====================
 function wireListeners(){
   const input = document.getElementById('search-input');
   const button = document.getElementById('search-btn');
-  const debounced = () => { 
-    clearTimeout(debounceTimer); 
-    debounceTimer = setTimeout(performSearch, 200); 
+  const debounced = () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(performSearch, 200);
   };
-  
-  if (input) { 
-    input.addEventListener('input', debounced); 
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') performSearch(); }); 
+
+  if (input) {
+    input.addEventListener('input', debounced);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') performSearch(); });
   }
   if (button) button.addEventListener('click', performSearch);
-  
+
   document.querySelectorAll('.search-filters input').forEach(cb => cb.addEventListener('change', performSearch));
 
   const modeSelect = document.getElementById('search-mode');
   const fuzzyBlock = document.getElementById('fuzzy-controls');
   const fuzzySlider = document.getElementById('fuzzy-distance');
-  
+
   if (modeSelect) {
     modeSelect.addEventListener('change', () => {
       searchMode = modeSelect.value;
@@ -621,7 +736,7 @@ function wireListeners(){
       performSearch();
     });
   }
-  
+
   if (fuzzySlider) {
     fuzzySlider.addEventListener('input', () => {
       fuzzyDistance = parseInt(fuzzySlider.value, 10);
@@ -639,9 +754,9 @@ function wireListeners(){
   const ex = document.getElementById('date-exact');
   const rs = document.getElementById('date-reset');
 
-  const debounceDates = () => { 
-    clearTimeout(debounceTimer); 
-    debounceTimer = setTimeout(performSearch, 100); 
+  const debounceDates = () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(performSearch, 100);
   };
 
   if (df) {
@@ -660,13 +775,13 @@ function wireListeners(){
   }
   if (ex) {
     ex.addEventListener('change', () => {
-      if (ex.checked) { 
-        if (dt) { 
-          dt.value = ''; 
+      if (ex.checked) {
+        if (dt) {
+          dt.value = '';
           dt.disabled = true;
           dt.style.opacity = '0.5';
-        } 
-      } else { 
+        }
+      } else {
         if (dt) {
           dt.disabled = false;
           dt.style.opacity = '1';
@@ -677,12 +792,12 @@ function wireListeners(){
   }
   if (rs) {
     rs.addEventListener('click', () => {
-      if (df) df.value = ''; 
-      if (dt) { 
-        dt.value = ''; 
+      if (df) df.value = '';
+      if (dt) {
+        dt.value = '';
         dt.disabled = false;
         dt.style.opacity = '1';
-      } 
+      }
       if (ex) ex.checked = false;
       performSearch();
     });
@@ -693,9 +808,9 @@ function wireResultsList(){
   const container = document.getElementById('search-results');
   if (!container) return;
   container.addEventListener('click', (ev) => {
-    const toggle = ev.target.closest('.toggle-details'); 
+    const toggle = ev.target.closest('.toggle-details');
     if (!toggle) return;
-    const item = ev.target.closest('.search-result'); 
+    const item = ev.target.closest('.search-result');
     const details = item.querySelector('.details');
     const show = details.style.display === 'none' || !details.style.display;
     details.style.display = show ? 'block' : 'none';
@@ -706,49 +821,49 @@ function wireResultsList(){
 }
 
 function wirePagination(){
-  const bar = document.getElementById('results-pagination'); 
+  const bar = document.getElementById('results-pagination');
   if (!bar) return;
   bar.addEventListener('click', (ev) => {
-    const btn = ev.target.closest('[data-page]'); 
+    const btn = ev.target.closest('[data-page]');
     if (!btn) return;
-    const page = Number(btn.getAttribute('data-page')); 
+    const page = Number(btn.getAttribute('data-page'));
     if (!Number.isFinite(page)) return;
-    currentPage = page; 
+    currentPage = page;
     renderPage();
     document.querySelector('.search-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 }
 
-// =============== Export ===============
+// ===================== Export =====================
 function wireExportBar(){
-  const bar = document.getElementById('export-bar'); 
+  const bar = document.getElementById('export-bar');
   if (!bar) return;
-  document.getElementById('export-csv')?.addEventListener('click', () => { 
-    if (!currentResultsAll.length) return; 
-    const csv = toCSV_fromRaw(currentResultsAll); 
-    downloadText(csv, 'sok-treff.csv', {addBOM: true}); 
+  document.getElementById('export-csv')?.addEventListener('click', () => {
+    if (!currentResultsAll.length) return;
+    const csv = toCSV_fromRaw(currentResultsAll);
+    downloadText(csv, 'sok-treff.csv', {addBOM: true});
   });
-  document.getElementById('export-txt')?.addEventListener('click', () => { 
-    if (!currentResultsAll.length) return; 
-    const txt = toTXT_likeDetails(currentResultsAll); 
-    downloadText(txt, 'sok-treff.txt'); 
+  document.getElementById('export-txt')?.addEventListener('click', () => {
+    if (!currentResultsAll.length) return;
+    const txt = toTXT_likeDetails(currentResultsAll);
+    downloadText(txt, 'sok-treff.txt');
   });
 }
 
-function setExportEnabled(on){ 
-  const bar = document.getElementById('export-bar'); 
-  if (!bar) return; 
-  bar.style.display = 'flex'; 
+function setExportEnabled(on){
+  const bar = document.getElementById('export-bar');
+  if (!bar) return;
+  bar.style.display = 'flex';
   const csvBtn = document.getElementById('export-csv');
   const txtBtn = document.getElementById('export-txt');
-  if (csvBtn) csvBtn.disabled = !on; 
-  if (txtBtn) txtBtn.disabled = !on; 
+  if (csvBtn) csvBtn.disabled = !on;
+  if (txtBtn) txtBtn.disabled = !on;
 }
 
 function toTXT_likeDetails(rows){
-  const parts = []; 
+  const parts = [];
   for (const r of rows) {
-    const headL = r.DN_ref || r.RN_ref || 'Uten referanse'; 
+    const headL = r.DN_ref || r.RN_ref || 'Uten referanse';
     const headR = dnToArchaic(r.DN_ref) || '';
     const dateLine = (r.date_rn_text?.trim() || r.date_dn_text?.trim() || formatDateRange(r.date_start, r.date_end));
     const placeBits = [
@@ -764,20 +879,20 @@ function toTXT_likeDetails(rows){
     ];
     if (r.regest?.trim()) bits.push('', 'REGEST:', r.regest);
     if (r.sammendrag_raw?.trim()) bits.push('', 'SAMMENDRAG:', r.sammendrag_raw);
-    if (r.brevtekst?.trim()) bits.push('', 'BREVTEKST:', r.brevtekst);
+    if (r.brevtekst?.trim()) bits.push('', 'BREVTEKST:', r.brevtekst.slice(0, 30000) + (r.brevtekst.length > 30000 ? '…' : ''));
     if (r.kilde?.trim()) bits.push('', 'KILDE (DN/RN):', r.kilde);
     if (r.fotnoter?.trim()) bits.push('', 'FOTNOTER:', r.fotnoter);
     if (r.tillegg?.trim()) bits.push('', 'TILLEGG:', r.tillegg);
     parts.push(bits.join('\n'));
-  } 
+  }
   return parts.join('\n\n---\n\n');
 }
 
 function toCSV_fromRaw(rows){
-  const keySet = new Set(); 
-  for (const r of rows) { 
-    const raw = r._raw || {}; 
-    for (const k of Object.keys(raw)) keySet.add(k); 
+  const keySet = new Set();
+  for (const r of rows) {
+    const raw = r._raw || {};
+    for (const k of Object.keys(raw)) keySet.add(k);
   }
   const preferred = [
     '\ufeffSDNID', 'SDNID', 'SDN_ID', 'SD_ID',
@@ -794,52 +909,52 @@ function toCSV_fromRaw(rows){
   const headers = [...presentPreferred, ...remaining];
   const esc = v => `"${String(v ?? '').replace(/\r?\n/g, '\n').replace(/"/g, '""')}"`;
   const lines = [headers.join(',')];
-  for (const r of rows) { 
-    const raw = r._raw || {}; 
-    lines.push(headers.map(h => esc(raw[h])).join(',')); 
+  for (const r of rows) {
+    const raw = r._raw || {};
+    lines.push(headers.map(h => esc(raw[h])).join(','));
   }
   return lines.join('\r\n');
 }
 
-// =============== Misc utilities ===============
+// ===================== Misc =====================
 function formatDateRange(start, end){
-  const ys = parseYear(start); 
+  const ys = parseYear(start);
   const ye = (parseYear(end) ?? ys);
-  if (ys && ye) return ys === ye ? String(ys) : `${ys}–${ye}`; 
-  if (ys) return String(ys); 
-  if (ye) return String(ye); 
+  if (ys && ye) return ys === ye ? String(ys) : `${ys}–${ye}`;
+  if (ys) return String(ys);
+  if (ye) return String(ye);
   return 'Ukjent';
 }
-function parseYear(s){ 
-  const m = String(s || '').match(/^(\d{4})/); 
-  return m ? Number(m[1]) : null; 
+function parseYear(s){
+  const m = String(s || '').match(/^(\d{4})/);
+  return m ? Number(m[1]) : null;
 }
-function dnToArchaic(dn){ 
-  if (!dn) return ''; 
-  const m = String(dn).match(/^DN(\d{3})(\d{5})$/i); 
-  if (!m) return ''; 
-  const vol = parseInt(m[1], 10), num = parseInt(m[2], 10); 
-  return `Diplomatarium Norvegicum ${toRoman(vol)}, ${num}`; 
+function dnToArchaic(dn){
+  if (!dn) return '';
+  const m = String(dn).match(/^DN(\d{3})(\d{5})$/i);
+  if (!m) return '';
+  const vol = parseInt(m[1], 10), num = parseInt(m[2], 10);
+  return `Diplomatarium Norvegicum ${toRoman(vol)}, ${num}`;
 }
-function toRoman(num){ 
-  if (!Number.isFinite(num) || num <= 0) return ''; 
-  const map = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]; 
-  let out = ''; 
-  for (const [v, s] of map) { while (num >= v) { out += s; num -= v; } } 
-  return out; 
+function toRoman(num){
+  if (!Number.isFinite(num) || num <= 0) return '';
+  const map = [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']];
+  let out = '';
+  for (const [v, s] of map) { while (num >= v) { out += s; num -= v; } }
+  return out;
 }
-function downloadText(text, filename, opts = {}){ 
-  const parts = []; 
-  if (opts.addBOM) parts.push('\uFEFF'); 
-  parts.push(text); 
-  const blob = new Blob(parts, {type: 'text/plain;charset=utf-8'}); 
-  const url = URL.createObjectURL(blob); 
-  const a = document.createElement('a'); 
-  a.href = url; a.download = filename; 
-  document.body.appendChild(a); a.click(); 
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0); 
+function downloadText(text, filename, opts = {}){
+  const parts = [];
+  if (opts.addBOM) parts.push('\uFEFF');
+  parts.push(text);
+  const blob = new Blob(parts, {type: 'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
 }
-function snippet(t, n, isHtml = false){ 
+function snippet(t, n, isHtml = false){
   if (isHtml) {
     const temp = document.createElement('div');
     temp.innerHTML = t;
@@ -857,7 +972,7 @@ function snippet(t, n, isHtml = false){
     }
     return result + '…';
   }
-  const s = String(t || '').trim(); 
-  if (!s) return ''; 
-  return s.length <= n ? s : s.slice(0, n).replace(/\s+\S*$/, '') + '…'; 
+  const s = String(t || '').trim();
+  if (!s) return '';
+  return s.length <= n ? s : s.slice(0, n).replace(/\s+\S*$/, '') + '…';
 }
