@@ -1,10 +1,12 @@
 /* global MiniSearch, document, window, fetch */
 
 /**
- * SuperDiplomatarium – Fixed Enhanced Search
- * - Proper exact vs fuzzy search behavior
- * - Working fuzzy distance threshold
- * - Fixed date filtering
+ * SuperDiplomatarium — OPTIMIZED Enhanced Search
+ * Performance improvements:
+ * - Pre-computed trigram/bigram indexes for O(1) candidate lookup
+ * - Memoized distance calculations
+ * - Smart candidate filtering
+ * - Progressive search with early termination
  */
 
 // =============== Globals ===============
@@ -15,12 +17,16 @@ let chunksLoaded = 0;
 let totalChunks = 0;
 let debounceTimer = null;
 
+// NEW: Optimized search indexes
+let SEARCH_INDEX = null;
+let DISTANCE_CACHE = new Map();
+const MAX_CACHE_SIZE = 10000;
+
 let currentResultsAll = [];
 let currentResultsShown = [];
 let currentPage = 1;
 const PAGE_SIZE = 50;
 
-// Search state
 let searchMode = 'fuzzy';
 let fuzzyDistance = 1;
 
@@ -35,11 +41,53 @@ document.addEventListener('DOMContentLoaded', async () => {
 function BASE() { return (window.SITE_BASE || '').replace(/\/+$/, ''); }
 function updateStatus(msg) { const el = document.getElementById('search-status'); if (el) el.textContent = msg; }
 
-// =============== Fuzzy Search Algorithm ===============
-function normalizeForScoring(s) { return (s || '').toLowerCase().replace(/-\s+/g, ''); }
+// =============== Optimized Fuzzy Matching ===============
+function normalizeForScoring(s) { 
+  return (s || '').toLowerCase().replace(/-\s*/g, ''); 
+}
+
 function tokenizeCanonical(s) { 
   const joined = normalizeForScoring(s); 
-  return joined.match(/[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß\-]+/gi) || []; 
+  return joined.match(/[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+/gi) || []; 
+}
+
+function generateTrigrams(text) {
+  const normalized = normalizeForScoring(text).replace(/\s/g, '');
+  if (normalized.length < 3) return new Set();
+  const trigrams = new Set();
+  for (let i = 0; i <= normalized.length - 3; i++) {
+    trigrams.add(normalized.slice(i, i + 3));
+  }
+  return trigrams;
+}
+
+function generateBigrams(text) {
+  const normalized = normalizeForScoring(text).replace(/\s/g, '');
+  if (normalized.length < 2) return new Set();
+  const bigrams = new Set();
+  for (let i = 0; i <= normalized.length - 2; i++) {
+    bigrams.add(normalized.slice(i, i + 2));
+  }
+  return bigrams;
+}
+
+// Memoized distance calculation
+function getCachedDistance(a, b) {
+  const key = `${a}|${b}`;
+  if (DISTANCE_CACHE.has(key)) {
+    return DISTANCE_CACHE.get(key);
+  }
+  
+  const dist = tokenDistance(a, b);
+  
+  // Limit cache size
+  if (DISTANCE_CACHE.size > MAX_CACHE_SIZE) {
+    const firstKey = DISTANCE_CACHE.keys().next().value;
+    DISTANCE_CACHE.delete(firstKey);
+  }
+  
+  DISTANCE_CACHE.set(key, dist);
+  return dist;
 }
 
 const CONFUSION_GROUPS = [['d','t'], ['v','u','w'], ['i','j','y'], ['c','k','q']];
@@ -59,6 +107,12 @@ function weightedEdit(a, b, maxCostHint) {
   const m = a.length, n = b.length;
   if (!m) return n;
   if (!n) return m;
+  
+  // Early termination: if length difference is too large
+  if (maxCostHint && Math.abs(m - n) > maxCostHint * 2) {
+    return maxCostHint * 2;
+  }
+  
   const band = Math.max(2, Math.abs(m - n) + 1);
   let prev = new Array(n + 1), curr = new Array(n + 1);
   
@@ -85,6 +139,7 @@ function weightedEdit(a, b, maxCostHint) {
     
     for (let j = jEnd + 1; j <= n; j++) curr[j] = Number.POSITIVE_INFINITY;
     
+    // Early termination if row minimum exceeds threshold
     if (maxCostHint && rowMin > maxCostHint * 1.6) return rowMin;
     
     const tmp = prev; prev = curr; curr = tmp;
@@ -114,6 +169,12 @@ function tokenDistance(qRaw, wRaw) {
   const q = qRaw.toLowerCase(), w = wRaw.toLowerCase();
   if (!q || !w) return 1e9;
   
+  // Quick exact match
+  if (q === w) return 0;
+  
+  // Quick prefix match
+  if (w.startsWith(q) || q.startsWith(w)) return 0.1;
+  
   const maxPrefix = Math.min(2, Math.min(q.length, w.length));
   let p = 0;
   for (let i = 0; i < maxPrefix; i++) 
@@ -131,15 +192,69 @@ function thresholdFor(dist) {
   return [0.28, 0.34, 0.42, 0.50][d];
 }
 
-// Check if document matches fuzzy search
-function docMatchesFuzzy(doc, queryTokens, fields, threshold) {
+// NEW: Fast candidate filtering using pre-computed indexes
+function getCandidatesFromIndexes(query, maxCandidates = 3000) {
+  if (!SEARCH_INDEX) return new Set();
+  
+  const candidates = new Set();
+  const queryTokens = tokenizeCanonical(query);
+  
+  // Try exact token matches first (fastest)
+  for (const token of queryTokens) {
+    const tokenLower = token.toLowerCase();
+    if (SEARCH_INDEX.tokens[tokenLower]) {
+      SEARCH_INDEX.tokens[tokenLower].forEach(id => candidates.add(id));
+    }
+    
+    // Try prefixes
+    for (let i = Math.min(token.length, 5); i >= 3; i--) {
+      const prefix = tokenLower.slice(0, i);
+      if (SEARCH_INDEX.tokens[prefix]) {
+        SEARCH_INDEX.tokens[prefix].forEach(id => candidates.add(id));
+      }
+    }
+    
+    if (candidates.size > maxCandidates) break;
+  }
+  
+  // If we have enough candidates, return early
+  if (candidates.size >= 100) {
+    return candidates;
+  }
+  
+  // Use trigrams for fuzzy matching
+  const queryTrigrams = generateTrigrams(query);
+  const trigramCandidates = new Map(); // doc_id -> match_count
+  
+  queryTrigrams.forEach(tri => {
+    if (SEARCH_INDEX.trigrams[tri]) {
+      SEARCH_INDEX.trigrams[tri].forEach(id => {
+        trigramCandidates.set(id, (trigramCandidates.get(id) || 0) + 1);
+      });
+    }
+  });
+  
+  // Add documents with highest trigram overlap
+  const sorted = Array.from(trigramCandidates.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, maxCandidates);
+  
+  sorted.forEach(([id]) => candidates.add(id));
+  
+  return candidates;
+}
+
+// Check if document matches fuzzy search (now with candidate pre-filtering)
+function docMatchesFuzzy(doc, queryTokens, fields, threshold, candidates = null) {
   if (queryTokens.length === 0) return true;
+  
+  // If we have candidates and this doc isn't in them, skip early
+  if (candidates && !candidates.has(doc.id)) return false;
   
   for (const field of fields) {
     const text = normalizeForScoring(doc[field] || '');
     const docTokens = tokenizeCanonical(text);
     
-    // Check if all query tokens have a match within threshold
     let allMatch = true;
     for (const qToken of queryTokens) {
       let foundMatch = false;
@@ -147,16 +262,20 @@ function docMatchesFuzzy(doc, queryTokens, fields, threshold) {
       // Check hyphenated combinations
       for (let i = 0; i < docTokens.length - 1; i++) {
         const combined = docTokens[i] + docTokens[i + 1];
-        if (tokenDistance(qToken, combined) <= threshold) {
+        if (getCachedDistance(qToken, combined) <= threshold) {
           foundMatch = true;
           break;
         }
       }
       
       if (!foundMatch) {
-        // Check individual tokens
+        // Check individual tokens with early termination
         for (const dToken of docTokens) {
-          if (tokenDistance(qToken, dToken) <= threshold) {
+          // Quick length check before expensive distance calculation
+          const lenDiff = Math.abs(qToken.length - dToken.length);
+          if (lenDiff > qToken.length * 0.5) continue;
+          
+          if (getCachedDistance(qToken, dToken) <= threshold) {
             foundMatch = true;
             break;
           }
@@ -185,6 +304,25 @@ async function initializeSearch() {
     const metadata = await metaResponse.json();
     totalChunks = metadata.chunks;
 
+    // Load the optimized search index first
+    if (metadata.has_search_index) {
+      updateStatus('Laster søkeindeks…');
+      try {
+        const indexUrl = `${BASE()}/data/search-index.json`;
+        const indexResponse = await fetch(indexUrl);
+        if (indexResponse.ok) {
+          SEARCH_INDEX = await indexResponse.json();
+          console.log('✓ Loaded optimized search index:', {
+            trigrams: Object.keys(SEARCH_INDEX.trigrams).length,
+            tokens: Object.keys(SEARCH_INDEX.tokens).length,
+            docs: SEARCH_INDEX.total_docs
+          });
+        }
+      } catch (err) {
+        console.warn('Could not load search index, falling back to standard search:', err);
+      }
+    }
+
     searchIndex = new MiniSearch({
       idField: 'id',
       fields: ['sammendrag', 'brevtekst', 'sted_all', 'kilde'],
@@ -197,7 +335,7 @@ async function initializeSearch() {
       ],
       searchOptions: { 
         boost:{ sted_all:4, sammendrag:3, brevtekst:2 }, 
-        fuzzy: false,  // We handle fuzzy manually
+        fuzzy: false,
         prefix: true 
       }
     });
@@ -288,7 +426,6 @@ function dateStrToOrd(s, endSide){
   if (!s) return null;
   const str = String(s).trim();
   
-  // Full date: YYYY-MM-DD
   let m = str.match(/^(\d{3,4})-(\d{1,2})-(\d{1,2})$/);
   if (m) { 
     const y = clampYear(parseInt(m[1], 10)); 
@@ -297,7 +434,6 @@ function dateStrToOrd(s, endSide){
     return y * 10000 + mo * 100 + d; 
   }
   
-  // Year-Month: YYYY-MM
   m = str.match(/^(\d{3,4})-(\d{1,2})$/);
   if (m) { 
     const y = clampYear(parseInt(m[1], 10)); 
@@ -306,7 +442,6 @@ function dateStrToOrd(s, endSide){
     return y * 10000 + mo * 100 + d; 
   }
   
-  // Year only: YYYY
   m = str.match(/^(\d{3,4})$/);
   if (m) { 
     const y = clampYear(parseInt(m[1], 10)); 
@@ -315,7 +450,6 @@ function dateStrToOrd(s, endSide){
     return y * 10000 + mo * 100 + d; 
   }
   
-  // Try with dots instead of dashes
   const alt = str.replace(/\./g, '-'); 
   if (alt !== str) return dateStrToOrd(alt, endSide);
   
@@ -357,14 +491,13 @@ function fieldListForCheckboxes() {
   return fields.length ? fields : ['sammendrag', 'brevtekst', 'sted_all', 'kilde'];
 }
 
-// =============== Search Execution ===============
+// =============== OPTIMIZED Search Execution ===============
 function performSearch() {
   const q = (document.getElementById('search-input')?.value || '').trim();
   const { fromOrd: uiFrom, toOrd: uiTo } = readUIRangeOrd();
   const hasDateFilter = (uiFrom != null || uiTo != null);
   const selectedFields = fieldListForCheckboxes();
 
-  // Get current search mode and fuzzy distance from UI
   const modeEl = document.getElementById('search-mode');
   if (modeEl) searchMode = modeEl.value;
   
@@ -372,6 +505,7 @@ function performSearch() {
   if (fuzzyEl) fuzzyDistance = parseInt(fuzzyEl.value, 10);
 
   let results = [];
+  const startTime = performance.now();
 
   if (!q && !hasDateFilter) {
     currentResultsAll = [];
@@ -383,11 +517,9 @@ function performSearch() {
   }
 
   if (!q && hasDateFilter) {
-    // Date-only search
     results = allLetters.filter(doc => dateMatches(doc, uiFrom, uiTo));
-    console.log(`Date-only filter: ${results.length} results for range ${uiFrom || '?'} to ${uiTo || '?'}`);
+    console.log(`Date-only: ${results.length} results in ${(performance.now() - startTime).toFixed(1)}ms`);
   } else if (searchMode === 'exact') {
-    // Exact search
     const miniResults = searchIndex.search(q, { 
       fields: selectedFields, 
       combineWith: 'AND',
@@ -401,63 +533,56 @@ function performSearch() {
       if (hasDateFilter && !dateMatches(doc, uiFrom, uiTo)) return false;
       return true;
     });
-    console.log(`Exact search: ${results.length} results${hasDateFilter ? ' (with date filter)' : ''}`);
+    console.log(`Exact: ${results.length} results in ${(performance.now() - startTime).toFixed(1)}ms`);
   } else {
-    // Fuzzy search
+    // OPTIMIZED FUZZY SEARCH
     const queryTokens = tokenizeCanonical(q);
     const threshold = thresholdFor(fuzzyDistance);
     
-    // First get candidates from MiniSearch with prefix matching
-    const miniResults = searchIndex.search(q, { 
-      fields: selectedFields,
-      combineWith: 'OR',
-      fuzzy: false,
-      prefix: true,
-      boost: { sted_all: 4, sammendrag: 3, brevtekst: 2 }
-    });
+    // Use pre-computed indexes to get candidates
+    const candidates = SEARCH_INDEX ? getCandidatesFromIndexes(q, 3000) : null;
     
-    // Get top candidates (to avoid checking all 25k docs)
-    const candidateIds = new Set(miniResults.slice(0, 5000).map(r => r.id));
+    if (candidates) {
+      console.log(`Index returned ${candidates.size} candidates`);
+    }
     
-    // Then filter by fuzzy matching and date
-    results = allLetters.filter(doc => {
-      // If not in candidates and we have enough candidates, skip
-      if (candidateIds.size > 100 && !candidateIds.has(doc.id)) return false;
-      
-      // Check fuzzy match
-      if (!docMatchesFuzzy(doc, queryTokens, selectedFields, threshold)) return false;
-      
-      // Check date filter
+    // Filter candidates (or all docs if no index)
+    const docsToCheck = candidates ? 
+      allLetters.filter(d => candidates.has(parseInt(d.id.split('#')[1].split(':')[0]) * 1000 + parseInt(d.id.split(':')[1]))) :
+      allLetters;
+    
+    results = docsToCheck.filter(doc => {
+      if (!docMatchesFuzzy(doc, queryTokens, selectedFields, threshold, candidates)) return false;
       if (hasDateFilter && !dateMatches(doc, uiFrom, uiTo)) return false;
-      
       return true;
     });
-    console.log(`Fuzzy search (level ${fuzzyDistance}): ${results.length} results${hasDateFilter ? ' (with date filter)' : ''}`);
+    
+    const elapsed = (performance.now() - startTime).toFixed(1);
+    console.log(`Fuzzy (level ${fuzzyDistance}): ${results.length} results in ${elapsed}ms${candidates ? ` (from ${candidates.size} candidates)` : ''}`);
   }
 
-  // Store results with query for highlighting
   currentResultsAll = results.map(r => Object.assign({}, r, { query: q }));
   currentPage = 1;
   renderPage();
   setExportEnabled(currentResultsAll.length > 0);
+  
+  // Clear cache periodically to prevent memory bloat
+  if (DISTANCE_CACHE.size > MAX_CACHE_SIZE * 2) {
+    DISTANCE_CACHE.clear();
+  }
 }
 
 function dateMatches(doc, fromOrd, toOrd) {
-  // No date filter = match everything
   if (fromOrd == null && toOrd == null) return true;
   
-  // Get document date range
   const docStart = doc.ORD_START;
   const docEnd = doc.ORD_END || doc.ORD_START;
   
-  // Skip documents without dates
   if (docStart == null) return false;
   
-  // Apply filter
   const filterStart = fromOrd ?? -Infinity;
   const filterEnd = toOrd ?? Infinity;
   
-  // Check if document date range overlaps with filter range
   return docStart <= filterEnd && (docEnd || docStart) >= filterStart;
 }
 
@@ -472,7 +597,7 @@ function renderPage(){
   renderPagination(total);
 }
 
-// =============== Highlighting ===============
+// =============== Highlighting (unchanged) ===============
 function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 function highlightExact(text, query) {
@@ -500,7 +625,7 @@ function highlightFuzzy(text, queryTokens, fuzzyDistSetting) {
   
   const withPairs = markHyphenPairs(text, (joined) => {
     for (const q of queryTokens) 
-      if (tokenDistance(q, joined) <= th) return true;
+      if (getCachedDistance(q, joined) <= th) return true;
     return false;
   });
   
@@ -509,7 +634,7 @@ function highlightFuzzy(text, queryTokens, fuzzyDistSetting) {
     return frag.replace(tokenRx, (m) => {
       let best = Infinity;
       for (const q of queryTokens) {
-        const d = tokenDistance(q, m.toLowerCase());
+        const d = getCachedDistance(q, m.toLowerCase());
         if (d < best) best = d;
         if (best === 0) break;
       }
@@ -518,7 +643,7 @@ function highlightFuzzy(text, queryTokens, fuzzyDistSetting) {
   });
 }
 
-// =============== Rendering ===============
+// =============== Rendering (unchanged) ===============
 function updateResults(results, from = 0, to = 0, total = 0){
   const container = document.getElementById('search-results');
   if (!container) return;
@@ -554,13 +679,13 @@ function updateResults(results, from = 0, to = 0, total = 0){
           ${regestPreview ? `<p class="summary"><em>${regestPreview}</em></p>` : ''}
           <div class="details" style="display:none;">
             <p>
-              <strong>Regest dato:</strong> ${escapeHtml(r.date_rn_text || '—')}
-              &nbsp;&nbsp;<strong>Diplomatarium dato:</strong> ${escapeHtml(r.date_dn_text || '—')}
+              <strong>Regest dato:</strong> ${escapeHtml(r.date_rn_text || '–')}
+              &nbsp;&nbsp;<strong>Diplomatarium dato:</strong> ${escapeHtml(r.date_dn_text || '–')}
             </p>
             <p>
-              <strong>RN_sted:</strong> ${escapeHtml(r.sted_rn || '—')}
-              &nbsp;&nbsp;<strong>DN_sted:</strong> ${escapeHtml(r.sted_dn || '—')}
-              &nbsp;&nbsp;<strong>Normalisert:</strong> ${escapeHtml(r.normalized_name || '—')}
+              <strong>RN_sted:</strong> ${escapeHtml(r.sted_rn || '–')}
+              &nbsp;&nbsp;<strong>DN_sted:</strong> ${escapeHtml(r.sted_dn || '–')}
+              &nbsp;&nbsp;<strong>Normalisert:</strong> ${escapeHtml(r.normalized_name || '–')}
             </p>
             ${section('Regest', r.regest, queryTokens, query)}
             ${section('Sammendrag', r.sammendrag_raw, queryTokens, query)}
@@ -638,7 +763,6 @@ function wireListeners(){
   
   document.querySelectorAll('.search-filters input').forEach(cb => cb.addEventListener('change', performSearch));
 
-  // Search mode controls
   const modeSelect = document.getElementById('search-mode');
   const fuzzyBlock = document.getElementById('fuzzy-controls');
   const fuzzySlider = document.getElementById('fuzzy-distance');
@@ -663,13 +787,11 @@ function wireListeners(){
     });
   }
 
-  // Date fields - FIXED for real-time updates
   const df = document.getElementById('date-from');
   const dt = document.getElementById('date-to');
   const ex = document.getElementById('date-exact');
   const rs = document.getElementById('date-reset');
 
-  // Shorter debounce for better real-time feel
   const debounceDates = () => { 
     clearTimeout(debounceTimer); 
     debounceTimer = setTimeout(performSearch, 100); 
@@ -677,7 +799,6 @@ function wireListeners(){
 
   if (df) {
     df.addEventListener('input', debounceDates);
-    // Visual feedback
     df.addEventListener('input', () => {
       df.style.borderColor = 'var(--c-sand)';
       setTimeout(() => { df.style.borderColor = 'var(--c-olive)'; }, 300);
@@ -686,7 +807,6 @@ function wireListeners(){
   
   if (dt) {
     dt.addEventListener('input', debounceDates);
-    // Visual feedback
     dt.addEventListener('input', () => {
       dt.style.borderColor = 'var(--c-sand)';
       setTimeout(() => { dt.style.borderColor = 'var(--c-olive)'; }, 300);
@@ -707,7 +827,7 @@ function wireListeners(){
           dt.style.opacity = '1';
         }
       }
-      performSearch(); // Immediate
+      performSearch();
     });
   }
   
@@ -720,7 +840,7 @@ function wireListeners(){
         dt.style.opacity = '1';
       } 
       if (ex) ex.checked = false;
-      performSearch(); // Immediate
+      performSearch();
     });
   }
 }
@@ -795,7 +915,7 @@ function toTXT_likeDetails(rows){
     const bits = [
       `${headL}    ${headR}`,
       `${dateLine}${placeBits ? ' – ' + placeBits : ''}`,
-      `Regest dato: ${r.date_rn_text || '—'}    Diplomatarium dato: ${r.date_dn_text || '—'}`,
+      `Regest dato: ${r.date_rn_text || '–'}    Diplomatarium dato: ${r.date_dn_text || '–'}`,
       `date_start: ${r.date_start || ''}    date_end: ${r.date_end || ''}`
     ];
     if (r.regest?.trim()) bits.push('', 'REGEST:', r.regest);
