@@ -48,7 +48,7 @@ const MAX_SECTION_CHARS = {    // cap rendered characters in details
 };
 
 let searchMode = 'fuzzy';
-let fuzzyDistance = 1;
+let fuzzyDistance = 0;  // Default to Streng (strict)
 
 // Small distance cache to avoid repeated work, auto-purged regularly
 let DISTANCE_CACHE = new Map();
@@ -224,7 +224,13 @@ function getCachedDistance(a, b) {
   if (q === w) {
     dist = 0;
   } else if (w.startsWith(q) || q.startsWith(w)) {
-    dist = 0.1;
+    // Prefix match - scale by length difference
+    // "hamar" vs "ham": diff = 2, maxLen = 5, dist = 2/5 = 0.4
+    // "hamar" vs "hamarr": diff = 1, maxLen = 6, dist = 1/6 = 0.17
+    const maxLen = Math.max(q.length, w.length);
+    const minLen = Math.min(q.length, w.length);
+    const lenDiff = maxLen - minLen;
+    dist = lenDiff / maxLen;
   } else {
     const maxLen = Math.max(q.length, w.length);
     const minLen = Math.min(q.length, w.length);
@@ -262,13 +268,14 @@ function getCachedDistance(a, b) {
 
 function thresholdFor(dist) {
   const d = Math.max(0, Math.min(3, parseInt(dist || '1', 10)));
-  // Streng (0): 0.08 - almost exact, only cluster normalization (nn→n, ck→k, þ→th)
-  //             Will NOT match vowel changes or consonant substitutions
-  // Moderat (1): 0.28 - typical medieval variations including vowel changes (a/e, i/y)
+  // Streng (0): 0.18 - exact + cluster normalization + single vowel change
+  //             Hamar matches: Hamar, Hammar, Hammer (→hamer), Hamer
+  //             Hamar does NOT match: ham (prefix too short), har (consonant change)
+  // Moderat (1): 0.32 - typical medieval variations including multiple vowel changes
   //              and known consonant equivalences (k/c, þ/th, v/u)
-  // Avslappet (2): 0.45 - more lenient, allows multiple variations
-  // Veldig (3): 0.58 - very loose for rare/uncertain spellings
-  return [0.08, 0.28, 0.45, 0.58][d];
+  // Avslappet (2): 0.48 - more lenient, allows multiple variations
+  // Veldig (3): 0.60 - very loose for rare/uncertain spellings
+  return [0.18, 0.32, 0.48, 0.60][d];
 }
 
 // ===================== Date index helpers =====================
