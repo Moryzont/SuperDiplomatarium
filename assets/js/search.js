@@ -304,20 +304,16 @@ async function initializeSearch() {
     const metadata = await metaResponse.json();
     totalChunks = metadata.chunks;
 
-    // Load the optimized search index first
-    if (metadata.has_search_index) {
+    // Load the optimized search index first (now chunked)
+    if (metadata.has_search_index && metadata.index_metadata) {
       updateStatus('Laster søkeindeks…');
       try {
-        const indexUrl = `${BASE()}/data/search-index.json`;
-        const indexResponse = await fetch(indexUrl);
-        if (indexResponse.ok) {
-          SEARCH_INDEX = await indexResponse.json();
-          console.log('✓ Loaded optimized search index:', {
-            trigrams: Object.keys(SEARCH_INDEX.trigrams).length,
-            tokens: Object.keys(SEARCH_INDEX.tokens).length,
-            docs: SEARCH_INDEX.total_docs
-          });
-        }
+        await loadChunkedIndexes(metadata.index_metadata);
+        console.log('✓ Loaded optimized search index:', {
+          trigrams: Object.keys(SEARCH_INDEX.trigrams).length,
+          tokens: Object.keys(SEARCH_INDEX.tokens).length,
+          docs: SEARCH_INDEX.total_docs
+        });
       } catch (err) {
         console.warn('Could not load search index, falling back to standard search:', err);
       }
@@ -345,6 +341,45 @@ async function initializeSearch() {
   } catch (err) {
     console.error('Feil ved initialisering:', err);
     updateStatus('Kunne ikke laste brevsamlingen. Prøv å laste siden på nytt.');
+  }
+}
+
+async function loadChunkedIndexes(indexMetadata) {
+  SEARCH_INDEX = {
+    trigrams: {},
+    bigrams: {},
+    tokens: {},
+    total_docs: indexMetadata.total_docs
+  };
+  
+  // Load all trigram chunks
+  for (let i = 0; i < indexMetadata.trigram_chunks; i++) {
+    const url = `${BASE()}/data/indexes/trigrams-${String(i).padStart(2, '0')}.json`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const chunk = await res.json();
+      Object.assign(SEARCH_INDEX.trigrams, chunk);
+    }
+  }
+  
+  // Load all token chunks
+  for (let i = 0; i < indexMetadata.token_chunks; i++) {
+    const url = `${BASE()}/data/indexes/tokens-${String(i).padStart(2, '0')}.json`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const chunk = await res.json();
+      Object.assign(SEARCH_INDEX.tokens, chunk);
+    }
+  }
+  
+  // Load bigram chunks
+  for (let i = 0; i < indexMetadata.bigram_chunks; i++) {
+    const url = `${BASE()}/data/indexes/bigrams-${String(i).padStart(2, '0')}.json`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const chunk = await res.json();
+      Object.assign(SEARCH_INDEX.bigrams, chunk);
+    }
   }
 }
 
