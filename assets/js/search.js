@@ -162,9 +162,9 @@ function subCost(a, b) {
   
   // Both are vowels - very low cost for vowel changes
   if (aIsVowel && bIsVowel) {
-    if (inSameGroup(a, b)) return 0.1;  // Known vowel equivalence (æ/e, ø/o, etc)
-    return 0.2;  // Any vowel to vowel change is relatively cheap
-  }
+  if (inSameGroup(a, b)) return 0.15;
+  return 0.35;  // Was 0.2
+}
   
   // Both are consonants
   if (!aIsVowel && !bIsVowel) {
@@ -251,7 +251,7 @@ function getCachedDistance(a, b) {
       scaleFactor = 1.0 / Math.sqrt(1 + (minLen - 4) * 0.08);
     }
     
-    dist = rawDist * scaleFactor;
+    dist = rawDist;
   }
   
   if (DISTANCE_CACHE.size > MAX_CACHE_SIZE) {
@@ -268,14 +268,7 @@ function getCachedDistance(a, b) {
 
 function thresholdFor(dist) {
   const d = Math.max(0, Math.min(3, parseInt(dist ?? '1', 10)));
-  // Streng (0): 0.18 - exact + cluster normalization + single vowel change
-  //             Hamar matches: Hamar, Hammar, Hammer (→hamer), Hamer
-  //             Hamar does NOT match: ham (prefix too short), har (consonant change)
-  // Moderat (1): 0.32 - typical medieval variations including multiple vowel changes
-  //              and known consonant equivalences (k/c, þ/th, v/u)
-  // Avslappet (2): 0.48 - more lenient, allows multiple variations
-  // Veldig (3): 0.60 - very loose for rare/uncertain spellings
-  return [0.18, 0.32, 0.48, 0.60][d];
+  return [0.12, 0.25, 0.38, 0.50][d];  // Was [0.18, 0.32, 0.48, 0.60]
 }
 
 // ===================== Date index helpers =====================
