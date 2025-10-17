@@ -3,6 +3,7 @@
 /**
  * SuperDiplomatarium — Browser-safe search (DATE INDEX ONLY)
  *
+ * - Enhanced for medieval Scandinavian orthography (1100-1600) - OPTIMIZED
  * - No text indexing (no MiniSearch / n-grams).
  * - Tiny in-memory date index for fast range filtering.
  * - Progressive, cancelable scanning in batches with yield pauses.
@@ -51,7 +52,7 @@ let fuzzyDistance = 1;
 
 // Small distance cache to avoid repeated work, auto-purged regularly
 let DISTANCE_CACHE = new Map();
-const MAX_CACHE_SIZE = 6000;
+const MAX_CACHE_SIZE = 8000;
 
 document.addEventListener('DOMContentLoaded', async () => {
   await initializeSearch();
@@ -64,23 +65,74 @@ document.addEventListener('DOMContentLoaded', async () => {
 function BASE() { return (window.SITE_BASE || '').replace(/\/+$/, ''); }
 function updateStatus(msg) { const el = document.getElementById('search-status'); if (el) el.textContent = msg; }
 
+// ===================== Optimized Medieval Scandinavian Orthographic Equivalences =====================
+// Character-level equivalences stored as lookup for O(1) access
+
+const CHAR_EQUIV = {
+  // Old Norse special characters
+  'þ': 'thtd', 'ð': 'ddht',
+  // K/C/Q variations
+  'c': 'kq', 'k': 'cq', 'q': 'ck',
+  // V/U/W confusion
+  'v': 'uw', 'u': 'vw', 'w': 'uv',
+  // I/J/Y proximity
+  'i': 'jy', 'j': 'iy', 'y': 'ij',
+  // F/V alternation
+  'f': 'v',
+  // S/Z
+  's': 'z', 'z': 's',
+  // Vowels
+  'æ': 'eä', 'e': 'æä', 'ä': 'æe',
+  'ø': 'öo', 'ö': 'øo', 'o': 'øö',
+  'å': 'ao', 'a': 'åo',
+  'ǫ': 'öo', 'œ': 'æe',
+  // G/J palatal
+  'g': 'j'
+};
+
+// Build reverse map
+for (const [key, vals] of Object.entries(CHAR_EQUIV)) {
+  for (const v of vals) {
+    if (!CHAR_EQUIV[v]) CHAR_EQUIV[v] = '';
+    if (!CHAR_EQUIV[v].includes(key)) CHAR_EQUIV[v] += key;
+  }
+}
+
+// Cluster patterns for normalization (applied once during tokenization)
+const CLUSTER_NORMALIZE = [
+  [/ck/g, 'k'], [/kk/g, 'k'], [/kh/g, 'k'],
+  [/þ/g, 'th'], [/ð/g, 'd'],
+  [/nn/g, 'n'], [/ll/g, 'l'], [/tt/g, 't'], [/dd/g, 'd'],
+  [/pp/g, 'p'], [/gg/g, 'g'], [/ss/g, 's'], [/mm/g, 'm'],
+  [/ff/g, 'f'], [/rr/g, 'r'], [/bb/g, 'b'],
+  [/aa/g, 'å'], [/oo/g, 'o'], [/ee/g, 'e'], [/ii/g, 'i']
+];
+
 // ===================== Light fuzzy tools =====================
 function normalizeForScoring(s) {
-  return (s || '').toLowerCase().replace(/-\s*/g, '');
+  let n = (s || '').toLowerCase().replace(/-\s*/g, '');
+  // Apply cluster normalizations for better matching
+  for (const [pattern, replacement] of CLUSTER_NORMALIZE) {
+    n = n.replace(pattern, replacement);
+  }
+  return n;
 }
+
 function tokenizeCanonical(s, cap = MAX_TOKENS_PER_FIELD) {
   const joined = normalizeForScoring(s);
-  const rx = /[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+/gi;
+  const rx = /[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüßǫ]+/gi;
   const out = [];
   let m;
   while ((m = rx.exec(joined)) && out.length < cap) out.push(m[0]);
   return out;
 }
+
 function bigramsOf(s) {
   const out = [];
-  for (let i = 0; i < s.length - 1; i++) out.push(s.slice(0, i + 2));
+  for (let i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2));
   return out;
 }
+
 function diceCoeff(a, b) {
   if (!a.length || !b.length) return 0;
   const m = new Map();
@@ -93,13 +145,22 @@ function diceCoeff(a, b) {
   return (2 * inter) / (a.length + b.length);
 }
 
-const CONFUSION_GROUPS = [['d','t'], ['v','u','w'], ['i','j','y'], ['c','k','q']];
 function inSameGroup(a, b) {
   if (a === b) return true;
-  for (const g of CONFUSION_GROUPS) if (g.includes(a) && g.includes(b)) return true;
-  return false;
+  const equiv = CHAR_EQUIV[a];
+  return equiv && equiv.includes(b);
 }
-function subCost(a, b) { return a === b ? 0 : (inSameGroup(a, b) ? 0.35 : 1); }
+
+function subCost(a, b) {
+  if (a === b) return 0;
+  if (inSameGroup(a, b)) return 0.2;  // Low cost for known equivalences
+  
+  // Minim confusion (u/n/m/i in Gothic scripts)
+  const minims = 'unmi';
+  if (minims.includes(a) && minims.includes(b)) return 0.4;
+  
+  return 1;
+}
 
 function weightedEdit(a, b, maxCostHint) {
   const m = a.length, n = b.length;
@@ -149,14 +210,21 @@ function getCachedDistance(a, b) {
     const dice = 1 - diceCoeff(bigramsOf(q), bigramsOf(w));
     dist = 0.7 * we + 0.3 * dice;
   }
-  if (DISTANCE_CACHE.size > MAX_CACHE_SIZE) DISTANCE_CACHE.clear();
+  if (DISTANCE_CACHE.size > MAX_CACHE_SIZE) {
+    // Clear oldest half
+    const entries = Array.from(DISTANCE_CACHE.entries());
+    DISTANCE_CACHE.clear();
+    for (let i = Math.floor(entries.length / 2); i < entries.length; i++) {
+      DISTANCE_CACHE.set(entries[i][0], entries[i][1]);
+    }
+  }
   DISTANCE_CACHE.set(key, dist);
   return dist;
 }
 
 function thresholdFor(dist) {
   const d = Math.max(0, Math.min(3, parseInt(dist || '1', 10)));
-  return [0.28, 0.34, 0.42, 0.50][d];
+  return [0.30, 0.38, 0.46, 0.54][d];
 }
 
 // ===================== Date index helpers =====================
@@ -557,7 +625,7 @@ function highlightExact(text, query) {
 
 function markHyphenPairs(text, shouldMarkCombined) {
   const clipped = text.length > MAX_SECTION_CHARS.default ? text.slice(0, MAX_SECTION_CHARS.default) + '…' : text;
-  const rx = /([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)-(\s+)([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß]+)/gi;
+  const rx = /([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüßǫ]+)-(\s+)([A-Za-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüßǫ]+)/gi;
   return (clipped || '').replace(rx, (m, a, ws, b) =>
     shouldMarkCombined((a + b).toLowerCase()) ? '<mark>' + a + '-' + ws + b + '</mark>' : m
   );
@@ -579,7 +647,7 @@ function highlightFuzzy(text, queryTokens, fuzzyDistSetting) {
     return false;
   });
 
-  const tokenRx = /[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüß\-]+/gi;
+  const tokenRx = /[a-zæøåäöáéíóúýþðœçàèìòùâêîôûãõüßǫ\-]+/gi;
   return highlightOutsideMarks(escapeHtml(withPairs), (frag) => {
     return frag.replace(tokenRx, (m) => {
       let best = Infinity;
