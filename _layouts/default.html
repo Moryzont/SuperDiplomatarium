@@ -15,6 +15,8 @@
   <link rel="stylesheet" href="{{ '/assets/css/main.css' | relative_url }}">
 
   <script>window.SITE_BASE = "{{ '' | relative_url }}";</script>
+  <!-- i18n must load early -->
+  <script src="{{ '/assets/js/i18n.js' | relative_url }}"></script>
 </head>
 <body>
   <header class="site-header">
@@ -25,9 +27,10 @@
         </a>
         <button class="nav-toggle" aria-label="Meny">☰</button>
         <ul class="nav-links">
-          <li><a href="{{ '/sok/'  | relative_url }}">Søk</a></li>
-          <li><a href="{{ '/kart/' | relative_url }}">Kart</a></li>
-          <li><a href="{{ '/om/'   | relative_url }}">Om samlingen</a></li>
+          <li><a href="{{ '/sok/'  | relative_url }}" data-i18n="nav.search">Søk</a></li>
+          <li><a href="{{ '/kart/' | relative_url }}" data-i18n="nav.map">Kart</a></li>
+          <li><a href="{{ '/om/'   | relative_url }}" data-i18n="nav.about">Om samlingen</a></li>
+          <li><button id="lang-toggle" class="lang-toggle" type="button">English</button></li>
         </ul>
       </div>
     </nav>

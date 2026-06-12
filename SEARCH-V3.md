@@ -68,12 +68,22 @@ node tests/perf-search-v3.mjs                 # payload/latency measurements
 | Worst case (12.7K hits) | multi-second scan, UI jank | ~1.1 s |
 | Fulltext search | fake (summaries only) | real, over 49,738 brevtekster |
 
+## Map
+
+`kart.html` loads `data/v3/map.json` (46,496 geo-tagged letters, ~1 MB gzipped;
+rebuild with `ONLY=map`). Popups, the area-selection detail view and exports
+fetch full records on demand from `data/optimized/full-XX.json`.
+Tests: `node tests/test-map-v3.mjs`.
+
+## Data inventory after cleanup
+
+- `data/chunks/` — build input (synced from backend); not used at runtime.
+- `data/optimized/full-*.json` — runtime detail store for search and map.
+- `data/v3/` — search indexes + core.json + map.json (generated, gitignored).
+- Removed: `all_letters.json`, `optimized/search-*`, `letters-light-*`,
+  `fulltext/`, `trigrams-*`, `assets/js/search.js`, `search-v2.js`, `main.js`.
+
 ## Not yet done
 
-- `kart.html` still loads legacy chunks.
-- Legacy data formats (`data/chunks` at runtime, `data/optimized/search-*`,
-  `letters-light-*`, `fulltext/`, `trigrams-*`, `all_letters.json`) are no
-  longer used by `sok.html` and can be dropped from deployment once the map is
-  migrated. Keep `data/optimized/full-*.json` (detail view) and `data/chunks/`
-  (build input).
 - CI build-and-deploy workflow (GitHub Actions) — planned, not pushed yet.
+  When deploying, exclude `data/chunks/` from the published site.
