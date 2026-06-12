@@ -5,70 +5,69 @@ permalink: /sok/
 ---
 
 <div class="search-container">
-  <h1>Søk i brevsamlingen</h1>
+  <h1 data-i18n="search.title">Søk i brevsamlingen</h1>
 
-  <!-- Main search box -->
-  <div class="search-box">
-    <input type="text" id="search-input" placeholder="Søk i over 25 000 dokumenter" autocomplete="off">
-    <button id="search-btn" class="btn btn-primary">Søk</button>
-  </div>
-
-  <!-- Compact controls row -->
-  <div class="search-controls-compact">
-    <!-- Left side: Mode and Fuzzy -->
-    <div class="controls-left">
-      <div class="mode-group">
-        <label for="search-mode">Søkemodus:</label>
-        <select id="search-mode" class="mode-select">
-          <option value="fuzzy">Uskarpt (fuzzy)</option>
-          <option value="exact">Eksakt</option>
+  <!-- Main search area -->
+  <div class="search-area">
+    <div class="search-row">
+      <div class="search-field-select">
+        <select id="search-field" class="field-select" data-i18n-options>
+          <option value="text" selected data-i18n="search.field.text">Tekst (sammendrag)</option>
+          <option value="id" data-i18n="search.field.id">Referanse / ID</option>
+          <option value="fulltext" data-i18n="search.field.fulltext">Fulltekst (brevtekst)</option>
+          <option value="place" data-i18n="search.field.place">Sted</option>
+          <option value="all" data-i18n="search.field.all">Alt</option>
         </select>
       </div>
-      
-      <div id="fuzzy-controls" class="fuzzy-controls">
-        <label for="fuzzy-distance">Fuzzy-nivå:</label>
-        <input type="range" id="fuzzy-distance" min="0" max="3" value="1" step="1" class="fuzzy-slider">
-        <span id="fuzzy-label" class="fuzzy-label">Moderat</span>
+      <div class="search-input-wrapper">
+        <input type="text" id="search-input" placeholder="Søk i sammendrag..." data-i18n-placeholder="search.placeholder.text" autocomplete="off">
+        <button id="search-btn" class="btn btn-primary" data-i18n="search.button">Søk</button>
       </div>
     </div>
 
-    <!-- Right side: Field checkboxes -->
-    <div class="controls-right">
-      <span class="filter-label">Søk i:</span>
-      <div class="field-checkboxes">
-        <label><input type="checkbox" id="search-sammendrag" checked> Sammendrag</label>
-        <label><input type="checkbox" id="search-brevtekst" checked> Brevtekst</label>
-        <label><input type="checkbox" id="search-sted"> Sted</label>
-        <label><input type="checkbox" id="search-kilde"> Kilde</label>
-      </div>
-    </div>
-  </div>
-
-  <!-- Date filtering row -->
-  <div class="date-filter-row">
-    <span class="date-label">Datofilter:</span>
-    <div class="date-inputs">
-      <div class="date-field">
-        <label for="date-from">Fra</label>
-        <input id="date-from" placeholder="YYYY eller YYYY-MM-DD" autocomplete="off">
-      </div>
-      <div class="date-field">
-        <label for="date-to">Til</label>
-        <input id="date-to" placeholder="YYYY eller YYYY-MM-DD" autocomplete="off">
-      </div>
-      <label class="date-exact-check">
-        <input type="checkbox" id="date-exact"> Eksakt dato
-      </label>
-      <button id="date-reset" type="button" class="btn-reset">Nullstill</button>
-    </div>
-  </div>
-
-  <!-- Export bar -->
-  <div id="export-bar" class="export-bar" style="display:none;">
-    <span class="export-label">Eksportér treff:</span>
-    <div class="export-buttons">
-      <button id="export-txt" class="btn-export" disabled>TXT</button>
-      <button id="export-csv" class="btn-export" disabled>CSV</button>
+    <div class="search-options-row">
+      <details class="search-help">
+        <summary>Søketips</summary>
+        <div class="search-tips-content">
+          <p><strong>Søk etter referanse:</strong> Velg "Referanse / ID" og skriv f.eks. <code>DN XII 251</code>, <code>RN I 223</code>, <code>SDHK 1234</code> eller <code>DD 123</code></p>
+          <p><strong>Tekstsøk:</strong> Søk etter ord eller fraser i sammendrag. Eksempel: <code>kong Håkon</code>, <code>biskop</code>, <code>jordegods</code></p>
+          <p><strong>Stedsøk:</strong> Velg "Sted" for å søke etter stedsnavn. Eksempel: <code>Bergen</code>, <code>Nidaros</code>, <code>Oslo</code></p>
+          <p><strong>Datofilter:</strong> Bruk "Filtre" for å begrense til en tidsperiode, f.eks. 1200–1350</p>
+          <p><strong>Kildefilter:</strong> Bruk "Filtre" for å begrense søket til bestemte diplomataria</p>
+        </div>
+      </details>
+      <details class="search-filters">
+        <summary>Filtre</summary>
+        <div class="filters-content">
+          <div class="filter-group date-filter">
+            <label>Datoperiode:</label>
+            <input id="date-from" type="text" placeholder="Fra (YYYY)" autocomplete="off">
+            <span class="date-sep">–</span>
+            <input id="date-to" type="text" placeholder="Til (YYYY)" autocomplete="off">
+            <button id="date-reset" type="button" class="btn-reset" title="Nullstill">✕</button>
+          </div>
+          <div class="filter-group source-filter">
+            <label>Kilder:</label>
+            <div class="source-checkboxes">
+              <label class="db-checkbox"><input type="checkbox" id="filter-dn" checked> DN</label>
+              <label class="db-checkbox"><input type="checkbox" id="filter-rn" checked> RN</label>
+              <label class="db-checkbox"><input type="checkbox" id="filter-dd" checked> DD</label>
+              <label class="db-checkbox"><input type="checkbox" id="filter-sdhk" checked> SDHK</label>
+              <label class="db-checkbox"><input type="checkbox" id="filter-df" checked> DF</label>
+            </div>
+          </div>
+        </div>
+      </details>
+      <details class="search-sorting">
+        <summary>Sortering</summary>
+        <div class="sorting-content">
+          <select id="sort-mode" class="sort-select">
+            <option value="date">Dato (eldst først)</option>
+            <option value="date-desc">Dato (nyest først)</option>
+            <option value="completeness">Mest komplett</option>
+          </select>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -76,8 +75,20 @@ permalink: /sok/
   <div id="search-status" class="search-status"></div>
   <div id="search-results"></div>
   <div id="results-pagination" class="pagination" style="display:none;"></div>
+
+  <!-- Export bar (at bottom) -->
+  <div id="export-bar" class="export-bar" style="display:none;">
+    <span class="export-count"></span>
+    <div class="export-buttons">
+      <button id="export-csv" class="btn-small" disabled data-i18n="export.csv">Eksporter CSV</button>
+      <button id="export-txt" class="btn-small" disabled data-i18n="export.txt">Eksporter TXT</button>
+    </div>
+  </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/minisearch@6.1.0/dist/umd/index.min.js" defer></script>
+<!-- Load progress bar -->
+<div id="load-progress" style="position:fixed;top:0;left:0;height:3px;background:#4a7c59;width:0;transition:width 0.3s;z-index:9999;display:none;"></div>
+
 <script>window.SITE_BASE = "{{ '' | relative_url }}";</script>
-<script src="{{ '/assets/js/search.js' | relative_url }}" defer></script>
+<script src="{{ '/assets/js/letter-display.js' | relative_url }}"></script>
+<script src="{{ '/assets/js/search-v3.js' | relative_url }}"></script>

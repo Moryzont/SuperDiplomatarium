@@ -1,0 +1,14 @@
+# Local-testing override: skip copying the data tree into _site (it is symlinked
+# by serve-local instead). Do NOT use this config for deployment.
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - .gitignore
+  - letters.csv
+  - data
+  - node_modules
+  - scripts
+  - tests
+  - package.json
+  - package-lock.json
