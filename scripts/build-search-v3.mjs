@@ -10,10 +10,14 @@
  * Record order follows the chunk files, so the array position in core.json equals
  * the global index used by data/optimized/full-XX.json (full_chunk_size = 500).
  *
+ * Also writes data/optimized/full-XX.json: the on-demand full-record store used
+ * by the search detail view and map popups (500 letters per chunk, addressed by
+ * global index).
+ *
  * Usage:  node scripts/build-search-v3.mjs            # full build
  *         LIMIT=2000 node scripts/build-search-v3.mjs # smoke test on first N letters
  *         ONLY=core,map node scripts/build-search-v3.mjs  # rebuild a subset of artifacts
- *         (artifact names: main, fulltext, place, core, map)
+ *         (artifact names: main, fulltext, place, core, map, full)
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -103,7 +107,11 @@ function ordToIso(ord) {
 }
 
 function* loadLetters() {
-  const files = fs.readdirSync(CHUNKS_DIR).filter(f => /^letters-chunk-\d+\.json$/.test(f)).sort();
+  // Numeric chunk order — lexicographic sort would put -100 before -11 and
+  // misalign the global index against everything else.
+  const files = fs.readdirSync(CHUNKS_DIR)
+    .filter(f => /^letters-chunk-\d+\.json$/.test(f))
+    .sort((a, b) => parseInt(a.match(/(\d+)/)[1], 10) - parseInt(b.match(/(\d+)/)[1], 10));
   let i = 0;
   for (const f of files) {
     const chunk = JSON.parse(fs.readFileSync(path.join(CHUNKS_DIR, f), 'utf8'));
@@ -245,6 +253,31 @@ async function main() {
     };
     fs.writeFileSync(path.join(OUT_DIR, 'map.json'), JSON.stringify(mapOut));
     console.log(`[map] done: ${rows.length} geo-tagged letters, ${(fs.statSync(path.join(OUT_DIR, 'map.json')).size / 1e6).toFixed(1)} MB`);
+  }
+
+  // 6. Full-record store: data/optimized/full-XX.json, 500 letters per chunk.
+  //    Runtime contract: letter at global index i lives in full-{floor(i/500)}.json
+  //    and carries its index as `i`. (Replaces the retired optimize-data.js.)
+  if (wants('full')) {
+    const FULL_DIR = path.join(ROOT, 'data', 'optimized');
+    fs.mkdirSync(FULL_DIR, { recursive: true });
+    for (const f of fs.readdirSync(FULL_DIR)) {
+      if (/^full-\d+\.json$/.test(f)) fs.unlinkSync(path.join(FULL_DIR, f));
+    }
+    const FULL_CHUNK = 500;
+    let buf = [], chunkNo = 0, total = 0;
+    const flush = () => {
+      if (!buf.length) return;
+      fs.writeFileSync(path.join(FULL_DIR, `full-${String(chunkNo).padStart(2, '0')}.json`), JSON.stringify(buf));
+      chunkNo++; buf = [];
+    };
+    for (const [i, r] of loadLetters()) {
+      buf.push({ i, ...r });
+      total++;
+      if (buf.length === FULL_CHUNK) flush();
+    }
+    flush();
+    console.log(`[full] done: ${total} records in ${chunkNo} chunks`);
   }
 
   await pagefind.close();

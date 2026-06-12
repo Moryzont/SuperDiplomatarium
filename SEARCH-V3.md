@@ -43,9 +43,13 @@ data/optimized/full-XX.json           full records for the detail view (unchange
 
 ## Build & test locally
 
+See `../PIPELINE.md` for the full backend-to-site chain.
+
 ```bash
-npm install                                   # pagefind + puppeteer-core (dev only)
-node scripts/build-search-v3.mjs              # rebuild indexes (LIMIT=3000 for smoke test)
+npm install            # pagefind + puppeteer-core (dev only)
+./build.sh             # rebuild all site data artifacts from data/chunks
+./build.sh --sync      # ...refreshing data/chunks from the backend first
+./build.sh --smoke     # quick dev build (first 3000 letters)
 
 # Serve like production (baseurl /SuperDiplomatarium), without copying data into _site:
 jekyll build --config _config.yaml,_config_local.yaml
@@ -53,9 +57,17 @@ ln -sfn "$PWD/data" _site/data
 mkdir -p /tmp/sd_serve && ln -sfn "$PWD/_site" /tmp/sd_serve/SuperDiplomatarium
 (cd /tmp/sd_serve && python3 -m http.server 8731)
 
-node tests/test-search-v3.mjs                 # 23 end-to-end tests (headless Chrome)
+node tests/test-search-v3.mjs                 # search e2e tests (headless Chrome)
+node tests/test-map-v3.mjs                    # map e2e tests
 node tests/perf-search-v3.mjs                 # payload/latency measurements
 ```
+
+Note on ordering: the global letter index is defined by enumerating
+`data/chunks/letters-chunk-*.json` in **numeric** chunk order. Every artifact
+(`core.json`, `map.json`, Pagefind metadata, `optimized/full-*.json`) is
+generated from that single enumeration in one build, so they can never drift —
+but always rebuild all artifacts together (plain `./build.sh`, no `ONLY=`)
+after a sync.
 
 `_config_local.yaml` is for local builds only — deployment must serve `data/`.
 

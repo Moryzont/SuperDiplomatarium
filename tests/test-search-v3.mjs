@@ -155,6 +155,20 @@ async function main() {
       el => !/Laster|Kunne ikke/.test(el.textContent)).catch(() => false);
     check('details expand with full record', footerVisible || contentLoaded, '');
 
+    console.log('\n[full-record alignment: detail must belong to the same letter]');
+    // High global index (SDHK lives past idx 55,000) — catches chunk-order bugs
+    r = await runSearch(page, { query: 'SDHK 30000', field: 'id' });
+    check('SDHK 30000 found', r.count === 1, `count=${r.count}`);
+    const alignment = await page.evaluate(async () => {
+      const h = window.__SD_STATE.currentResults[0];
+      const letter = await h.resolve();
+      const full = window.__SD_STATE.fullDataCache.get(letter.i);
+      return { cardId: letter.id, fullId: full?.SD_ID, idx: letter.i };
+    });
+    check('full record SD_ID matches card SD_ID',
+      alignment.fullId && alignment.cardId === alignment.fullId,
+      JSON.stringify(alignment));
+
     console.log('\n[pagination]');
     r = await runSearch(page, { query: 'biskop', field: 'text' });
     const firstId = r.cards[0]?.id;
