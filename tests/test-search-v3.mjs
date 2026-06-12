@@ -180,6 +180,25 @@ async function main() {
     check('footnote definitions render', fnState.items >= 3 || /tilskrevet/.test(fnState.footer),
       JSON.stringify(fnState));
 
+    console.log('\n[matching: parallel mandates must not merge (SD20000039 case)]');
+    // DN I 39 (mandate to bishop of Oslo) pairs with its RN regest RN I 788.
+    // RN I 789 is a parallel mandate to the bishop of HAMAR issued the same
+    // day — distinct RN number, distinct document. They share a citation to
+    // the 1622 registratur note DN XVII 867, which must not merge them.
+    const grp = await page.evaluate(() => {
+      const recs = window.__SD_STATE.core.records;
+      const byId = {};
+      for (const r2 of recs) byId[r2[0]] = r2[9] || [];
+      return {
+        dn39: byId['SD20000039'], rn788: byId['SD01007880'],
+        rn789: byId['SD01007890'], note1622: byId['SD20014949']
+      };
+    });
+    check('DN I 39 paired with RN 788 only',
+      JSON.stringify(grp.dn39) === '["SD01007880"]', JSON.stringify(grp.dn39));
+    check('RN 789 (Hamar mandate) standalone',
+      !grp.rn789 || grp.rn789.length === 0, JSON.stringify(grp.rn789));
+
     console.log('\n[related sources: toggle row capped]');
     const maxToggles = await page.evaluate(async () => {
       const recs = window.__SD_STATE.core.records;
