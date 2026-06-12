@@ -84,6 +84,14 @@ async function main() {
     });
     check('popup opens and loads summary', typeof popupOk === 'string' && popupOk.length > 20 && !/^no-/.test(popupOk), popupOk);
 
+    console.log('\n[popup -> full letter card]');
+    await page.click('.popup-show-letter');
+    await sleep(2500);
+    const cardCount = await page.$$eval('#selected-letters .letter-item', els => els.length);
+    check('letter card shown below map', cardCount === 1, String(cardCount));
+    const cardDetail = await page.$eval('#selected-letters .detail-summary', el => el.textContent).catch(() => '');
+    check('card details auto-expanded', cardDetail.length > 20 && !/Laster/.test(cardDetail), cardDetail.slice(0, 60));
+
     console.log('\n[errors]');
     check('no console errors', consoleErrors.length === 0, consoleErrors.slice(0, 3).join(' | '));
     check('no failed requests', failedRequests.length === 0, failedRequests.slice(0, 5).join(' | '));

@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   wireButtons();
   wireSelectionList();
   wireExportBar();
+  wirePopupActions();
 });
 
 function initializeMap() {
@@ -135,8 +136,33 @@ function renderMapPopup(letter, summary = '') {
       ${refs ? `<div class="popup-refs">${refs}</div>` : ''}
       <p class="popup-meta"><strong>${escapeHtml(date)}</strong> - ${escapeHtml(place)}</p>
       ${summary ? `<p class="popup-summary">${escapeHtml(summary)}</p>` : ''}
+      <p class="popup-actions">
+        <button class="popup-show-letter btn-link" data-letter-id="${letter.__id}">Vis brevet</button>
+      </p>
     </div>
   `;
+}
+
+// Popup "Vis brevet": render the letter as a card below the map (same view as
+// the area-selection tool) with its details pre-expanded.
+function wirePopupActions() {
+  document.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('.popup-show-letter');
+    if (!btn) return;
+    ev.preventDefault();
+    const letter = lettersData[parseInt(btn.dataset.letterId, 10)];
+    if (!letter) return;
+
+    displaySelectedLetters([letter]);
+    const sc = document.getElementById('selection-count');
+    if (sc) sc.textContent = '1 brev valgt fra kartet';
+
+    const item = document.querySelector('#selected-letters .letter-item');
+    if (item) {
+      item.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      item.querySelector('.toggle-details')?.click();
+    }
+  });
 }
 
 // Render source badges
