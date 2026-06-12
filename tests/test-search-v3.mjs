@@ -155,6 +155,51 @@ async function main() {
       el => !/Laster|Kunne ikke/.test(el.textContent)).catch(() => false);
     check('details expand with full record', footerVisible || contentLoaded, '');
 
+    console.log('\n[text normalization: DD mojibake repaired]');
+    r = await runSearch(page, { query: 'SD50007869', field: 'id' });
+    const ddText = await page.evaluate(async () => {
+      const l = await window.__SD_STATE.currentResults[0].resolve();
+      const full = window.__SD_STATE.fullDataCache.get(l.i);
+      return (full?.sammendrag || '') + (full?.brevtekst || '');
+    });
+    check('no mojibake in DD letter', ddText.length > 50 && !/Ã¦|â€/.test(ddText), ddText.slice(0, 60));
+    check('mojibake decoded to æ/ø', /[æø]/.test(ddText), '');
+
+    console.log('\n[footnotes: DN bracket format parses and renders]');
+    r = await runSearch(page, { query: 'SD20011535', field: 'id' });
+    check('DN footnote letter found', r.count === 1, `count=${r.count}`);
+    await page.click('.toggle-details');
+    await sleep(2500);
+    const fnState = await page.evaluate(() => {
+      const card = document.querySelector('.letter-card');
+      return {
+        items: card.querySelectorAll('.footnote-item').length,
+        footer: card.querySelector('.letter-footer')?.textContent?.slice(0, 200) || ''
+      };
+    });
+    check('footnote definitions render', fnState.items >= 3 || /tilskrevet/.test(fnState.footer),
+      JSON.stringify(fnState));
+
+    console.log('\n[related sources: toggle row capped]');
+    const maxToggles = await page.evaluate(async () => {
+      const recs = window.__SD_STATE.core.records;
+      let best = 0, bestId = null;
+      for (const rec of recs) {
+        const n = rec[9] ? rec[9].length : 0;
+        if (n > best) { best = n; bestId = rec[0]; }
+      }
+      document.getElementById('search-input').value = bestId;
+      document.getElementById('search-btn').click();
+      await new Promise(r2 => setTimeout(r2, 2500));
+      return {
+        biggestGroup: best + 1,
+        toggles: document.querySelectorAll('.source-toggle').length,
+        overflow: document.querySelectorAll('.source-overflow').length
+      };
+    });
+    check('largest group is sane (<=50)', maxToggles.biggestGroup <= 50, JSON.stringify(maxToggles));
+    check('toggle row capped at 8', maxToggles.toggles <= 8, JSON.stringify(maxToggles));
+
     console.log('\n[full-record alignment: detail must belong to the same letter]');
     // High global index (SDHK lives past idx 55,000) — catches chunk-order bugs
     r = await runSearch(page, { query: 'SDHK 30000', field: 'id' });

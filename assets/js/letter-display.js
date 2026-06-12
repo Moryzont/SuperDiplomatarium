@@ -359,21 +359,32 @@ function renderMapPopup(letter) {
 }
 
 /**
- * Parse footnotes from RN format: [^00000001] text... [^00000002] text...
- * Returns a map of footnote number to text
+ * Parse footnote definitions. Two formats exist in the corpus:
+ *   RN: "[^1] text; [^2] text"      DN: "[1] text; [2] text"
+ * Definition text may itself contain stray "[" characters
+ * ("Fra [ tilskrevet...") and bracketed years, so a definition boundary is
+ * only a marker at the start of the string or right after ";" / newline.
+ * Returns a map of footnote number to text.
  */
 function parseFootnotes(footnotesStr) {
   if (!footnotesStr) return new Map();
 
   const footnoteMap = new Map();
-  // Match [^00000001] followed by text until next [^...] or end
-  const regex = /\[\^0*(\d+)\]\s*([^\[]*?)(?=\[\^|\s*$)/g;
-  let match;
-
-  while ((match = regex.exec(footnotesStr)) !== null) {
-    const num = parseInt(match[1], 10);
-    const text = match[2].trim();
-    footnoteMap.set(num, text);
+  const marker = /\[\^?0*(\d+)\]\s*/g;
+  const boundaries = [];
+  let m;
+  while ((m = marker.exec(footnotesStr)) !== null) {
+    const before = footnotesStr.slice(0, m.index);
+    if (m.index === 0 || /[;\n]\s*$/.test(before)) {
+      boundaries.push({ num: parseInt(m[1], 10), contentStart: m.index + m[0].length, markerStart: m.index });
+    }
+  }
+  for (let k = 0; k < boundaries.length; k++) {
+    const end = k + 1 < boundaries.length ? boundaries[k + 1].markerStart : footnotesStr.length;
+    const text = footnotesStr.slice(boundaries[k].contentStart, end).replace(/[;\s]+$/, '').trim();
+    if (text && !footnoteMap.has(boundaries[k].num)) {
+      footnoteMap.set(boundaries[k].num, text);
+    }
   }
 
   return footnoteMap;
@@ -389,7 +400,7 @@ function renderTextWithFootnotes(text, footnoteMap) {
   let html = escapeHtml(text);
 
   // Replace [N] markers with hoverable superscript footnote numbers (no brackets)
-  html = html.replace(/\[(\d+)\]/g, (match, num) => {
+  html = html.replace(/\[\^?(\d+)\]/g, (match, num) => {
     const footnoteNum = parseInt(num, 10);
     const footnoteText = footnoteMap.get(footnoteNum);
 

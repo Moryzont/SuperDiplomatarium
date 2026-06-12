@@ -610,7 +610,14 @@ function renderSourceBadges(letter) {
         allSources.push({ idx: relIdx, source: rel.src || 'Ukjent', sdId, isActive: false });
       }
     }
-    return allSources.map(s => {
+    // Defensive cap: a card should never render an unbounded toggle row
+    const MAX_TOGGLES = 8;
+    const overflow = allSources.length - MAX_TOGGLES;
+    const shown = overflow > 0 ? allSources.slice(0, MAX_TOGGLES) : allSources;
+    const overflowHtml = overflow > 0
+      ? `<span class="source-overflow" title="${overflow} flere relaterte oppføringer">+${overflow}</span>`
+      : '';
+    return shown.map(s => {
       const color = SOURCE_COLORS[s.source] || '#6b7280';
       if (s.isActive) {
         return `<button class="source-toggle active" data-source-idx="${s.idx}" data-card-idx="${letter.i}"
@@ -620,7 +627,7 @@ function renderSourceBadges(letter) {
       return `<button class="source-toggle" data-source-idx="${s.idx}" data-card-idx="${letter.i}"
                       style="background-color: transparent; color: ${color}; border: 2px solid ${color};"
                       title="${s.sdId} - klikk for å vise">${s.source}</button>`;
-    }).join('');
+    }).join('') + overflowHtml;
   }
 
   const sources = [];
@@ -718,15 +725,10 @@ async function loadAndShowDetails(idx, showingSourceIdx = null) {
     contEl.style.display = 'inline';
   }
 
+  // Only fetch the displayed letter's full record; related letters load
+  // on demand when their toggle is clicked (groups can have many members).
   const displayIdx = showingSourceIdx !== null ? showingSourceIdx : idx;
-  const cl = coreLetter(idx);
-  const indicesToLoad = [displayIdx];
-  for (const sdId of (cl?.rel || [])) {
-    const relIdx = STATE.sdIdToIndex.get(sdId);
-    if (relIdx !== undefined) indicesToLoad.push(relIdx);
-  }
-
-  await loadFullDataForIndices(indicesToLoad);
+  await loadFullDataForIndices([displayIdx]);
   const full = getFullData(displayIdx);
   if (!full) {
     if (contEl) contEl.innerHTML = ' <em style="color:#BC6C25;">Kunne ikke laste.</em>';

@@ -101,6 +101,73 @@ for (const f of oldChunks) {
 }
 console.log(`Cleared ${oldChunks.length} old chunks`);
 
+// ---------- text normalization ----------
+// The raw scrapes carry encoding damage that the parsers don't yet repair:
+//  - DD: whole fields are UTF-8 double-decoded as cp1252 ("nÃ¦rvÃ¦rende", "â\x99¦")
+//  - SDHK/DN: stray cp1252 punctuation bytes (\x92 ' \x94 " \x96 –)
+//  - DN: a few literal HTML entities (&amp;)
+// NOTE: angle-bracket marks like ips<a>s are EDITORIAL notation in diplomatic
+// transcription, not HTML — never strip them.
+const CP1252 = {
+  0x80: '€', 0x82: '‚', 0x83: 'ƒ', 0x84: '„', 0x85: '…', 0x86: '†', 0x87: '‡',
+  0x88: 'ˆ', 0x89: '‰', 0x8a: 'Š', 0x8b: '‹', 0x8c: 'Œ', 0x8e: 'Ž', 0x91: "‘",
+  0x92: "’", 0x93: '“', 0x94: '”', 0x95: '•', 0x96: '–', 0x97: '—', 0x98: '˜',
+  0x99: '™', 0x9a: 'š', 0x9b: '›', 0x9c: 'œ', 0x9e: 'ž', 0x9f: 'Ÿ'
+};
+const utf8Strict = new TextDecoder('utf-8', { fatal: true });
+// Reverse cp1252 map: the mojibake sometimes went through a cp1252 display
+// step, so byte 0x93 appears as the CHARACTER '“' — map such chars back to
+// their byte value when reconstructing the original UTF-8 byte stream.
+const CP1252_REV = Object.fromEntries(
+  Object.entries(CP1252).map(([byte, ch]) => [ch, Number(byte)])
+);
+
+function fixEncoding(s) {
+  if (!s || typeof s !== 'string') return s;
+
+  // 1. Repair UTF-8-decoded-as-Latin1/cp1252 mojibake. Only attempted when the
+  //    signature is present, and only applied if the WHOLE string round-trips
+  //    as valid UTF-8 (strict decoder) — otherwise the text is left untouched.
+  if (/Ã[\x80-\xBF¦¸¥¤¶©¨«]|â[\x80-\x9F€‚„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]/.test(s)) {
+    try {
+      const bytes = new Uint8Array([...s].map(c => {
+        const cp = c.codePointAt(0);
+        if (cp <= 0xff) return cp;
+        const b = CP1252_REV[c];
+        if (b === undefined) throw new Error('not byte-mapped');
+        return b;
+      }));
+      s = utf8Strict.decode(bytes);
+    } catch {
+      // Mixed content: fall back to the common sequences only (both the
+      // raw-byte and the cp1252-character renderings of each)
+      s = s.replace(/Ã¦/g, 'æ').replace(/Ã¸/g, 'ø').replace(/Ã¥/g, 'å')
+        .replace(/Ã¤/g, 'ä').replace(/Ã¶/g, 'ö').replace(/Ã©/g, 'é')
+        .replace(/Ã¨/g, 'è').replace(/Ã¼/g, 'ü').replace(/Ã\x85/g, 'Å')
+        .replace(/Ã\x96/g, 'Ö').replace(/Ã\x84/g, 'Ä')
+        .replace(/â[\x80\u20ac][\x93\u201c]/g, '\u2013').replace(/â[\x80\u20ac][\x94\u201d]/g, '\u2014')
+        .replace(/â[\x80\u20ac][\x99\u2122]/g, '\u2019').replace(/â[\x80\u20ac][\x9c\u0153]/g, '\u201c')
+        .replace(/â[\x80\u20ac]\x9d/g, '\u201d').replace(/â[\x80\u20ac]¦/g, '\u2026')
+        .replace(/â[\x80\u20ac][\xa0 ]/g, '\u2020').replace(/â[\x99\u2122]¦/g, '\u2666')
+        // Orphaned "â€" (third byte lost upstream): in DF/DD prose these are
+        // almost always closing right quotes
+        .replace(/â[\x80\u20ac]/g, '\u201d');
+    }
+  }
+
+  // 2. Residual cp1252 punctuation bytes -> proper Unicode
+  s = s.replace(/[\x80-\x9f]/g, c => CP1252[c.charCodeAt(0)] || '');
+
+  // 3. Literal HTML entities
+  s = s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n));
+
+  // 4. Remaining C0 control chars (keep \n and \t)
+  s = s.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, ' ');
+
+  return s;
+}
+
 // Convert backend nested format to GitHub Pages flat format
 function convertLetter(letter) {
   const refs = letter.references || {};
@@ -133,6 +200,7 @@ function convertLetter(letter) {
     }
   }
 
+  const t = fixEncoding;
   return {
     SD_ID: letter.id || '',
     DN_REF: refs.dn || '',
@@ -140,31 +208,31 @@ function convertLetter(letter) {
     DD_REF: refs.dd || '',
     SDHK_REF: refs.sdhk || '',
     DF_REF: refs.df || '',
-    sammendrag: content.summary || '',
-    regest: content.regest || '',
-    DN_source: sources.dn_source || metadata.dn_source || '',
-    RN_source: sources.rn_source || metadata.rn_source || '',
-    DD_source: sources.dd_source || metadata.dd_source || '',
-    SDHK_source: sources.sdhk_source || metadata.sdhk_source || '',
-    DF_source: sources.df_source || metadata.df_source || '',
+    sammendrag: t(content.summary || ''),
+    regest: t(content.regest || ''),
+    DN_source: t(sources.dn_source || metadata.dn_source || ''),
+    RN_source: t(sources.rn_source || metadata.rn_source || ''),
+    DD_source: t(sources.dd_source || metadata.dd_source || ''),
+    SDHK_source: t(sources.sdhk_source || metadata.sdhk_source || ''),
+    DF_source: t(sources.df_source || metadata.df_source || ''),
     DN_dato: temporal.dn_date || '',
     RN_dato: temporal.rn_date || '',
     date_start: temporal.start || '',
     date_end: temporal.end || '',
-    original_date: temporal.original || '',
-    DN_sted: spatial.dn_place || '',
-    RN_sted: spatial.rn_place || '',
-    DD_sted: spatial.dd_place || '',
-    SDHK_sted: spatial.sdhk_place || '',
-    DF_sted: spatial.df_place || '',
+    original_date: t(temporal.original || ''),
+    DN_sted: t(spatial.dn_place || ''),
+    RN_sted: t(spatial.rn_place || ''),
+    DD_sted: t(spatial.dd_place || ''),
+    SDHK_sted: t(spatial.sdhk_place || ''),
+    DF_sted: t(spatial.df_place || ''),
     Normalized_name: normalizedName,
     lat: lat,
     lon: lon,
     uncertain_loc: uncertain,
     no_location: noLocation,
-    brevtekst: content.body || '',
-    fotnoter: content.footnotes || '',
-    Tillegg: content.additional_notes || '',
+    brevtekst: t(content.body || ''),
+    fotnoter: t(content.footnotes || ''),
+    Tillegg: t(content.additional_notes || ''),
     source: (letter.metadata || {}).source || '',
     cross_references: crossRefs.length > 0 ? crossRefs : null,
     // External URLs
