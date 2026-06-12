@@ -12,6 +12,8 @@
  *
  * Usage:  node scripts/build-search-v3.mjs            # full build
  *         LIMIT=2000 node scripts/build-search-v3.mjs # smoke test on first N letters
+ *         ONLY=core,map node scripts/build-search-v3.mjs  # rebuild a subset of artifacts
+ *         (artifact names: main, fulltext, place, core, map)
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,6 +24,8 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CHUNKS_DIR = path.join(ROOT, 'data', 'chunks');
 const OUT_DIR = path.join(ROOT, 'data', 'v3');
 const LIMIT = parseInt(process.env.LIMIT || '0', 10) || Infinity;
+const ONLY = process.env.ONLY ? new Set(process.env.ONLY.split(',').map(s => s.trim())) : null;
+const wants = name => !ONLY || ONLY.has(name);
 
 // ---------- date parsing ----------
 const MIN_YEAR = 700, MAX_YEAR = 1599;
@@ -167,7 +171,7 @@ async function main() {
 
   // 1. Main index: summaries/regests. Every letter gets a record (fallback content)
   //    so that filter-only browsing (date range, source) covers the whole corpus.
-  await buildIndex('pagefind-main', (i, r) => {
+  if (wants('main')) await buildIndex('pagefind-main', (i, r) => {
     const c = common(i, r);
     const body = r.sammendrag || r.regest || '';
     const fallback = [c.p, c.meta.od, r.SD_ID].filter(Boolean).join(' ');
@@ -175,14 +179,14 @@ async function main() {
   });
 
   // 2. Fulltext index: brevtekst only (records that actually have body text).
-  await buildIndex('pagefind-fulltext', (i, r) => {
+  if (wants('fulltext')) await buildIndex('pagefind-fulltext', (i, r) => {
     if (!r.brevtekst || r.brevtekst.length < 50) return null;
     const c = common(i, r);
     return { url: c.url, content: r.brevtekst, language: 'no', meta: c.meta, sort: c.sort, filters: c.filters };
   });
 
   // 3. Place index: place names only.
-  await buildIndex('pagefind-place', (i, r) => {
+  if (wants('place')) await buildIndex('pagefind-place', (i, r) => {
     const places = [...new Set([r.Normalized_name, r.DN_sted, r.RN_sted, r.DD_sted, r.SDHK_sted, r.DF_sted]
       .filter(v => v && v !== '[No_loc]'))];
     if (!places.length) return null;
@@ -195,24 +199,53 @@ async function main() {
 
   // 4. Core table: compact arrays, position = global index (matches full-XX.json chunks).
   //    Fields: [SD_ID, DN, RN, SDHK, DD, DF, src, ds, de, rel]
-  const core = [];
-  for (const [, r] of loadLetters()) {
-    const [ds, de] = letterDates(r);
-    core.push([
-      r.SD_ID, r.DN_REF || 0, r.RN_REF || 0, r.SDHK_REF || 0, r.DD_REF || 0, r.DF_REF || 0,
-      r.source || 0, ds, de, r.related_sd_ids?.length ? r.related_sd_ids : 0,
-    ]);
+  if (wants('core')) {
+    const core = [];
+    for (const [, r] of loadLetters()) {
+      const [ds, de] = letterDates(r);
+      core.push([
+        r.SD_ID, r.DN_REF || 0, r.RN_REF || 0, r.SDHK_REF || 0, r.DD_REF || 0, r.DF_REF || 0,
+        r.source || 0, ds, de, r.related_sd_ids?.length ? r.related_sd_ids : 0,
+      ]);
+    }
+    const coreOut = {
+      version: 3,
+      generated: new Date().toISOString(),
+      full_chunk_size: 500,
+      n: core.length,
+      fields: ['id', 'd', 'r', 'sdhk', 'dd', 'df', 'src', 'ds', 'de', 'rel'],
+      records: core,
+    };
+    fs.writeFileSync(path.join(OUT_DIR, 'core.json'), JSON.stringify(coreOut));
+    console.log(`[core] done: ${core.length} records, ${(fs.statSync(path.join(OUT_DIR, 'core.json')).size / 1e6).toFixed(1)} MB`);
   }
-  const coreOut = {
-    version: 3,
-    generated: new Date().toISOString(),
-    full_chunk_size: 500,
-    n: core.length,
-    fields: ['id', 'd', 'r', 'sdhk', 'dd', 'df', 'src', 'ds', 'de', 'rel'],
-    records: core,
-  };
-  fs.writeFileSync(path.join(OUT_DIR, 'core.json'), JSON.stringify(coreOut));
-  console.log(`[core] done: ${core.length} records, ${(fs.statSync(path.join(OUT_DIR, 'core.json')).size / 1e6).toFixed(1)} MB`);
+
+  // 5. Map table: letters with coordinates, just enough for markers and list cards.
+  //    Summaries/fulltext load on demand from full-XX.json (popup open / detail toggle).
+  //    Fields: [idx, lat, lon, SD_ID, DN, RN, SDHK, DD, DF, src, ds_iso, de_iso, od, place]
+  if (wants('map')) {
+    const rows = [];
+    for (const [i, r] of loadLetters()) {
+      if (!Number.isFinite(r.lat) || !Number.isFinite(r.lon)) continue;
+      const [ds, de] = letterDates(r);
+      rows.push([
+        i, Math.round(r.lat * 1e5) / 1e5, Math.round(r.lon * 1e5) / 1e5,
+        r.SD_ID, r.DN_REF || 0, r.RN_REF || 0, r.SDHK_REF || 0, r.DD_REF || 0, r.DF_REF || 0,
+        r.source || 0, ordToIso(ds) || 0, ordToIso(de) || 0,
+        trunc(r.original_date || r.DN_dato || r.RN_dato || '', 60) || 0, placeOf(r) || 0,
+      ]);
+    }
+    const mapOut = {
+      version: 3,
+      generated: new Date().toISOString(),
+      full_chunk_size: 500,
+      n: rows.length,
+      fields: ['idx', 'la', 'lo', 'id', 'd', 'r', 'sdhk', 'dd', 'df', 'src', 'ds', 'de', 'od', 'p'],
+      records: rows,
+    };
+    fs.writeFileSync(path.join(OUT_DIR, 'map.json'), JSON.stringify(mapOut));
+    console.log(`[map] done: ${rows.length} geo-tagged letters, ${(fs.statSync(path.join(OUT_DIR, 'map.json')).size / 1e6).toFixed(1)} MB`);
+  }
 
   await pagefind.close();
   console.log(`Build finished in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
