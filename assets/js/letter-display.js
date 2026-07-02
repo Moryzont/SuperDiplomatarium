@@ -543,6 +543,21 @@ function renderLetterDetails(full) {
     continuation += `<div class="detail-section"><em>Brevtekst:</em> ${formatTextWithFootnotes(brevtekst)}</div>`;
   }
 
+  // Modern translation (DD: tran_text), separate from the original text
+  if (full.oversettelse?.trim()) {
+    continuation += `<div class="detail-section"><em>Oversettelse:</em> ${formatTextWithFootnotes(full.oversettelse)}</div>`;
+  }
+
+  // Critical apparatus (DD: variant readings per witness)
+  if (full.tekstapparat?.trim()) {
+    continuation += `<div class="detail-section"><em>Tekstapparat:</em> ${escapeHtml(full.tekstapparat)}</div>`;
+  }
+
+  // Editorial notes (DD: nts)
+  if (full.noter?.trim()) {
+    continuation += `<div class="detail-section"><em>Noter:</em> ${escapeHtml(full.noter)}</div>`;
+  }
+
   // Add tillegg if present
   if (full.Tillegg?.trim()) {
     continuation += `<div class="detail-section"><em>Tillegg:</em> ${escapeHtml(full.Tillegg)}</div>`;

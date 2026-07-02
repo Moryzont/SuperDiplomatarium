@@ -85,7 +85,9 @@ async function main() {
 
     console.log('\n[init]');
     const initStatus = await waitForStatus(page, /brev klare for søk/);
-    check('core loads', /106997 brev klare/.test(initStatus), `got: ${initStatus}`);
+    // 106,986 = 23,894 DSL TEI DD documents (was 23,905 scraped; 12 stale
+    // scrape ids dropped, 1 repo-only added) + the other four collections
+    check('core loads', /106986 brev klare/.test(initStatus), `got: ${initStatus}`);
 
     console.log('\n[text search: sammendrag]');
     let r = await runSearch(page, { query: 'jordegods', field: 'text' });

@@ -231,6 +231,9 @@ function convertLetter(letter) {
     uncertain_loc: uncertain,
     no_location: noLocation,
     brevtekst: t(content.body || ''),
+    oversettelse: t(content.translation || ''),
+    tekstapparat: t(content.apparatus || ''),
+    noter: t(content.editorial_notes || ''),
     fotnoter: t(content.footnotes || ''),
     Tillegg: t(content.additional_notes || ''),
     source: (letter.metadata || {}).source || '',
@@ -272,7 +275,7 @@ const metadata = {
     'DN_dato', 'RN_dato', 'date_start', 'date_end', 'original_date',
     'DN_sted', 'RN_sted', 'DD_sted', 'SDHK_sted', 'DF_sted',
     'Normalized_name', 'lat', 'lon', 'uncertain_loc',
-    'brevtekst', 'fotnoter', 'Tillegg', 'source',
+    'brevtekst', 'oversettelse', 'tekstapparat', 'noter', 'fotnoter', 'Tillegg', 'source',
     'src_id', 'related_sd_ids'
   ],
   synced_from: 'backend',
