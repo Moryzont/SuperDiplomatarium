@@ -84,6 +84,17 @@ async function loadLettersForMap() {
 
     map.addLayer(markers);
 
+    // Deep link from a letter card: /kart/?sd=SDxxxxxxxx centers the map on
+    // that letter's pin and opens its popup.
+    const focusSd = new URLSearchParams(window.location.search).get('sd');
+    if (focusSd) {
+      const target = lettersData.find(l => l.id === focusSd);
+      if (target && target.__marker) {
+        map.setView([target.la, target.lo], 12);
+        markers.zoomToShowLayer(target.__marker, () => target.__marker.openPopup());
+      }
+    }
+
     const el = document.getElementById('selection-count');
     if (el) el.textContent = `${lettersData.length} brev med stedsinformasjon`;
   } catch (error) {

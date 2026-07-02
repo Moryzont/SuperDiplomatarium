@@ -1351,6 +1351,7 @@ mark {
 /* Meta line with date and place */
 .letter-meta {
   display: flex;
+  flex-wrap: wrap; /* lets the meta-details disclosure drop to its own row */
   gap: .5rem;
   align-items: baseline;
   color: var(--c-olive);
@@ -1556,6 +1557,55 @@ mark {
 
 .place-detail {
   font-style: italic;
+}
+
+/* Map deep link on the header line */
+.map-link {
+  font-size: .85rem;
+  color: var(--c-olive);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--c-olive);
+  white-space: nowrap;
+}
+
+.map-link:hover {
+  color: var(--c-dark);
+  border-bottom-style: solid;
+}
+
+/* Collapsed per-source datering/sted provenance */
+.meta-details {
+  flex-basis: 100%;
+  font-size: .85rem;
+  color: var(--c-olive);
+  margin-top: .15rem;
+}
+
+.meta-details summary {
+  cursor: pointer;
+  user-select: none;
+  opacity: .8;
+}
+
+.meta-details summary:hover {
+  opacity: 1;
+}
+
+.meta-table {
+  margin: .3rem 0 .2rem 1rem;
+  border-collapse: collapse;
+}
+
+.meta-table th {
+  text-align: left;
+  font-weight: 500;
+  padding: .1rem .8rem .1rem 0;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.meta-table td {
+  padding: .1rem 0;
 }
 
 /* Footer section - kilde and fotnoter */

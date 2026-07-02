@@ -210,7 +210,7 @@ function getPlaceName(letter) {
   if (letter.p) return letter.p;
 
   // Full format - prefer normalized name
-  return letter.Normalized_name ||
+  const place = letter.Normalized_name ||
          letter.normalized_name ||
          letter.DN_sted ||
          letter.RN_sted ||
@@ -218,6 +218,11 @@ function getPlaceName(letter) {
          letter.DD_sted ||
          letter.DF_sted ||
          null;
+  // Editorial uncertainty: dashed convention is a trailing '?'
+  if (place && letter.uncertain_loc && !String(place).trim().endsWith('?')) {
+    return `${place}?`;
+  }
+  return place;
 }
 
 /**
@@ -486,22 +491,38 @@ function renderLetterDetails(full) {
   if (full.SDHK_sted) sourcePlaces.push({ src: 'SDHK', val: full.SDHK_sted });
   if (full.DF_sted) sourcePlaces.push({ src: 'DF', val: full.DF_sted });
 
-  // Only show meta expansion if multiple sources have DIFFERENT values
-  const uniqueDateVals = new Set(sourceDates.map(d => d.val));
-  const uniquePlaceVals = new Set(sourcePlaces.map(p => p.val));
-
+  // One clean header line; provenance goes behind a single disclosure.
   let metaExpanded = '';
 
-  // Show dates only if there are multiple different date values across sources
-  if (sourceDates.length > 1 && uniqueDateVals.size > 1) {
-    const dateStr = sourceDates.map(d => `${d.src}: ${d.val}`).join(' | ');
-    metaExpanded += ` <span class="meta-detail">(${escapeHtml(dateStr)})</span>`;
+  // Map link when georeferenced — raw coordinates live in the tooltip
+  const sdIdForMap = full.SD_ID || full.sd_id;
+  if (full.lat && full.lon && sdIdForMap) {
+    const BASE = (window.SITE_BASE || '').replace(/\/+$/, '');
+    const coordTitle = `${full.lat}, ${full.lon}${full.uncertain_loc ? ' (usikker plassering)' : ''}`;
+    metaExpanded += ` <a class="map-link" href="${BASE}/kart/?sd=${encodeURIComponent(sdIdForMap)}" title="${escapeHtml(coordTitle)}">vis på kart</a>`;
   }
 
-  // Show places only if there are multiple different place values across sources
-  if (sourcePlaces.length > 1 && uniquePlaceVals.size > 1) {
-    const placeStr = sourcePlaces.map(p => `${p.src}: ${p.val}`).join(' | ');
-    metaExpanded += ` <span class="meta-detail place-detail">[${escapeHtml(placeStr)}]</span>`;
+  // Per-source datering/sted + the machine-readable interpretation, shown
+  // only where they add something beyond the header line.
+  const headerDate = formatDateRange(full.date_start, full.date_end, full.original_date);
+  const headerPlace = (full.Normalized_name || '').trim().toLowerCase();
+  const metaRows = [];
+  for (const d of sourceDates) {
+    if (d.val.trim() !== headerDate) metaRows.push([`Datering ${d.src}`, d.val]);
+  }
+  if (full.date_start) {
+    const range = (!full.date_end || full.date_start === full.date_end)
+      ? full.date_start : `${full.date_start} – ${full.date_end}`;
+    if (range !== headerDate) metaRows.push(['Tolket dato', range]);
+  }
+  for (const sp of sourcePlaces) {
+    const cleaned = sp.val.replace(/[.\s]+$/, '').toLowerCase();
+    if (cleaned !== headerPlace) metaRows.push([`Sted ${sp.src}`, sp.val]);
+  }
+  if (metaRows.length > 0) {
+    metaExpanded += `<details class="meta-details"><summary>datering og sted i kildene</summary><table class="meta-table"><tbody>` +
+      metaRows.map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`).join('') +
+      `</tbody></table></details>`;
   }
 
   // === TEXT CONTINUATION ===
@@ -596,24 +617,8 @@ function renderLetterDetails(full) {
   // === MORE SECTION (synthetic/computed data) ===
   const moreItems = [];
 
-  // Normalized place name
-  if (full.Normalized_name) {
-    moreItems.push(`<strong>Normalisert sted:</strong> ${escapeHtml(full.Normalized_name)}`);
-  }
-
-  // Coordinates
-  if (full.lat && full.lon) {
-    moreItems.push(`<strong>Koordinater:</strong> ${full.lat}, ${full.lon}${full.uncertain_loc ? ' (usikker)' : ''}`);
-  }
-
-  // Date range (computed)
-  if (full.date_start || full.date_end) {
-    const range = full.date_start === full.date_end
-      ? full.date_start
-      : `${full.date_start || '?'} – ${full.date_end || '?'}`;
-    moreItems.push(`<strong>Datoperiode:</strong> ${escapeHtml(range)}`);
-  }
-
+  // Place/coordinates/dates live in the header + meta disclosure now;
+  // this blob keeps only identifiers.
   // IDs
   const sdId = full.SD_ID || full.sd_id;
   const srcId = full.src_id;
