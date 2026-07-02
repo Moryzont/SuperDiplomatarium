@@ -85,4 +85,4 @@ permalink: /kart/
 <script>window.SITE_BASE = "{{ '' | relative_url }}";</script>
 
 <!-- Map logic -->
-<script src="{{ '/assets/js/map.js' | relative_url }}" defer></script>
+<script src="{{ '/assets/js/map.js' | relative_url }}?v={{ site.time | date: '%s' }}" defer></script>

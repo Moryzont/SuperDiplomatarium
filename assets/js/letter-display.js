@@ -209,8 +209,13 @@ function getPlaceName(letter) {
   // Search format
   if (letter.p) return letter.p;
 
+  // Geocoding placeholders ('[No_loc]', '[Unclear]') are workflow markers,
+  // not display names — fall through to the source spellings instead.
+  const normalized = /^\[(No_loc|Unclear)\]$/i.test(letter.Normalized_name || '')
+    ? '' : letter.Normalized_name;
+
   // Full format - prefer normalized name
-  const place = letter.Normalized_name ||
+  const place = normalized ||
          letter.normalized_name ||
          letter.DN_sted ||
          letter.RN_sted ||
@@ -491,36 +496,31 @@ function renderLetterDetails(full) {
   if (full.SDHK_sted) sourcePlaces.push({ src: 'SDHK', val: full.SDHK_sted });
   if (full.DF_sted) sourcePlaces.push({ src: 'DF', val: full.DF_sted });
 
-  // One clean header line; provenance goes behind a single disclosure.
+  // One clean header line. The place itself becomes the map link (the
+  // caller applies mapHref to the existing place element — no extra text);
+  // per-source variants sit behind ONE disclosure, only when the sources
+  // genuinely disagree.
   let metaExpanded = '';
-
-  // Map link when georeferenced — raw coordinates live in the tooltip
+  let mapHref = null;
+  let mapTitle = '';
   const sdIdForMap = full.SD_ID || full.sd_id;
   if (full.lat && full.lon && sdIdForMap) {
     const BASE = (window.SITE_BASE || '').replace(/\/+$/, '');
-    const coordTitle = `${full.lat}, ${full.lon}${full.uncertain_loc ? ' (usikker plassering)' : ''}`;
-    metaExpanded += ` <a class="map-link" href="${BASE}/kart/?sd=${encodeURIComponent(sdIdForMap)}" title="${escapeHtml(coordTitle)}">vis på kart</a>`;
+    mapHref = `${BASE}/kart/?sd=${encodeURIComponent(sdIdForMap)}`;
+    mapTitle = `Vis på kart · ${full.lat}, ${full.lon}${full.uncertain_loc ? ' (usikker plassering)' : ''}`;
   }
 
-  // Per-source datering/sted + the machine-readable interpretation, shown
-  // only where they add something beyond the header line.
-  const headerDate = formatDateRange(full.date_start, full.date_end, full.original_date);
-  const headerPlace = (full.Normalized_name || '').trim().toLowerCase();
+  const uniqueDateVals = new Set(sourceDates.map(d => d.val.trim()));
+  const uniquePlaceVals = new Set(sourcePlaces.map(sp => sp.val.replace(/[.\s]+$/, '').toLowerCase()));
   const metaRows = [];
-  for (const d of sourceDates) {
-    if (d.val.trim() !== headerDate) metaRows.push([`Datering ${d.src}`, d.val]);
+  if (sourceDates.length > 1 && uniqueDateVals.size > 1) {
+    for (const d of sourceDates) metaRows.push([`Datering ${d.src}`, d.val]);
   }
-  if (full.date_start) {
-    const range = (!full.date_end || full.date_start === full.date_end)
-      ? full.date_start : `${full.date_start} – ${full.date_end}`;
-    if (range !== headerDate) metaRows.push(['Tolket dato', range]);
-  }
-  for (const sp of sourcePlaces) {
-    const cleaned = sp.val.replace(/[.\s]+$/, '').toLowerCase();
-    if (cleaned !== headerPlace) metaRows.push([`Sted ${sp.src}`, sp.val]);
+  if (sourcePlaces.length > 1 && uniquePlaceVals.size > 1) {
+    for (const sp of sourcePlaces) metaRows.push([`Sted ${sp.src}`, sp.val]);
   }
   if (metaRows.length > 0) {
-    metaExpanded += `<details class="meta-details"><summary>datering og sted i kildene</summary><table class="meta-table"><tbody>` +
+    metaExpanded = `<details class="meta-details"><summary>datering og sted i kildene</summary><table class="meta-table"><tbody>` +
       metaRows.map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(v)}</td></tr>`).join('') +
       `</tbody></table></details>`;
   }
@@ -648,6 +648,8 @@ function renderLetterDetails(full) {
   // Return structured object for seamless insertion
   return {
     metaExpanded,
+    mapHref,
+    mapTitle,
     summaryWithFootnotes,  // Preview text with footnote hovers
     continuation,
     footer

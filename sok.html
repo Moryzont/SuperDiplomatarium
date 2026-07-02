@@ -90,5 +90,5 @@ permalink: /sok/
 <div id="load-progress" style="position:fixed;top:0;left:0;height:3px;background:#4a7c59;width:0;transition:width 0.3s;z-index:9999;display:none;"></div>
 
 <script>window.SITE_BASE = "{{ '' | relative_url }}";</script>
-<script src="{{ '/assets/js/letter-display.js' | relative_url }}"></script>
-<script src="{{ '/assets/js/search-v3.js' | relative_url }}"></script>
+<script src="{{ '/assets/js/letter-display.js' | relative_url }}?v={{ site.time | date: '%s' }}"></script>
+<script src="{{ '/assets/js/search-v3.js' | relative_url }}?v={{ site.time | date: '%s' }}"></script>

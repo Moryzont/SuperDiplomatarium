@@ -752,6 +752,14 @@ async function loadAndShowDetails(idx, showingSourceIdx = null) {
       if (placeEl && LD.getPlaceName) placeEl.textContent = LD.getPlaceName(full) || 'Ukjent sted';
     }
 
+    // Georeferenced letters: the place name links to the map pin (applies
+    // on every expansion, not just when switching to a related letter)
+    const placeLinkEl = card.querySelector('.letter-place');
+    if (placeLinkEl && details.mapHref && !placeLinkEl.querySelector('.place-link')) {
+      const placeName = (LD.getPlaceName ? LD.getPlaceName(full) : '') || placeLinkEl.textContent || 'Ukjent sted';
+      placeLinkEl.innerHTML = `<a class="place-link" href="${details.mapHref}" title="${escapeHtml(details.mapTitle)}">${escapeHtml(placeName)}</a>`;
+    }
+
     if (metaExpEl && details.metaExpanded) {
       metaExpEl.innerHTML = details.metaExpanded;
       metaExpEl.style.display = 'inline';

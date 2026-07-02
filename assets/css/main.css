@@ -1559,16 +1559,14 @@ mark {
   font-style: italic;
 }
 
-/* Map deep link on the header line */
-.map-link {
-  font-size: .85rem;
-  color: var(--c-olive);
+/* Georeferenced place: the name itself links to the map pin */
+.place-link {
+  color: inherit;
   text-decoration: none;
   border-bottom: 1px dotted var(--c-olive);
-  white-space: nowrap;
 }
 
-.map-link:hover {
+.place-link:hover {
   color: var(--c-dark);
   border-bottom-style: solid;
 }
