@@ -47,10 +47,13 @@ async function main() {
       { timeout: 30000 }
     ).then(h => h.jsonValue());
     console.log(`  loaded in ${Date.now() - t0} ms, ~${(bytes / 1e6).toFixed(1)} MB transferred (uncompressed)`);
-    check('all geo letters load', /46496 brev/.test(countText), countText);
+    // Geo count grows with every geocoding session — assert against the
+    // build's own map.json instead of a pinned number.
+    const mapN = JSON.parse(fs.readFileSync(new URL('../data/v3/map.json', import.meta.url))).n;
+    check('all geo letters load', new RegExp(`${mapN} brev`).test(countText), countText);
 
     const markerCount = await page.evaluate(() => window.__SD_MAP.letters().length);
-    check('letters in memory', markerCount === 46496, String(markerCount));
+    check('letters in memory', markerCount === mapN, `${markerCount} vs map.json n=${mapN}`);
 
     const clusters = await page.$$eval('.marker-cluster', els => els.length);
     check('clusters rendered', clusters > 0, String(clusters));
