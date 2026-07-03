@@ -2,6 +2,7 @@
  * End-to-end tests for the v3 map (kart.html on data/v3/map.json).
  * Usage: node tests/test-map-v3.mjs [baseUrl]
  */
+import fs from 'fs';
 import puppeteer from 'puppeteer-core';
 
 const BASE_URL = process.argv[2] || 'http://localhost:8731/SuperDiplomatarium';
