@@ -579,6 +579,18 @@ function renderLetterDetails(full) {
     continuation += `<div class="detail-section"><em>Noter:</em> ${escapeHtml(full.noter)}</div>`;
   }
 
+  // People and places mentioned in the letter (tagged in the curation tool)
+  if (Array.isArray(full.nevnte) && full.nevnte.length > 0) {
+    const chips = full.nevnte.map((m) => {
+      const icon = m.kind === 'person' ? '👤' : m.region ? '▦' : '📍';
+      const label = escapeHtml(m.name || m.text);
+      return (m.lat != null && m.lon != null)
+        ? `<span class="nevnt-chip" title="${m.lat}, ${m.lon}">${icon} ${label}</span>`
+        : `<span class="nevnt-chip nevnt-uplassert" title="ikke stedfestet ennå">${icon} ${label}</span>`;
+    }).join(' ');
+    continuation += `<div class="detail-section"><em>Nevnte:</em> ${chips}</div>`;
+  }
+
   // Add tillegg if present
   if (full.Tillegg?.trim()) {
     continuation += `<div class="detail-section"><em>Tillegg:</em> ${escapeHtml(full.Tillegg)}</div>`;

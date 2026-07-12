@@ -44,7 +44,7 @@ if (fs.existsSync(CORRECTIONS_DB)) {
   console.log('Loading corrections from database...');
   try {
     // Export corrections using sqlite3 CLI
-    const query = `SELECT sd_id, field_name, new_value FROM corrections`;
+    const query = `SELECT id, sd_id, field_name, new_value FROM corrections ORDER BY id`;
     const result = execSync(`sqlite3 -json "${CORRECTIONS_DB}" "${query}"`, { encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 });
     const rows = JSON.parse(result);
 
@@ -55,15 +55,36 @@ if (fs.existsSync(CORRECTIONS_DB)) {
       const corr = corrections.get(row.sd_id);
 
       if (row.field_name === 'place_normalized') {
-        // Format: "PlaceName|lat,lon"
-        const parts = row.new_value.split('|');
-        corr.normalized_name = parts[0];
-        if (parts[1]) {
-          const [lat, lon] = parts[1].split(',').map(parseFloat);
-          corr.lat = lat;
-          corr.lon = lon;
+        // Format: "PlaceName|lat,lon" or "PlaceName|lat,lon|region";
+        // '__REJECTED__' undoes the placement (latest row wins)
+        if (row.new_value === '__REJECTED__') {
+          delete corr.normalized_name; delete corr.lat; delete corr.lon; delete corr.is_region;
+        } else {
+          const parts = row.new_value.split('|');
+          corr.normalized_name = parts[0];
+          if (parts[1]) {
+            const [lat, lon] = parts[1].split(',').map(parseFloat);
+            corr.lat = lat;
+            corr.lon = lon;
+          }
+          corr.is_region = parts[2] === 'region';
+          correctionStats.normalized++;
         }
-        correctionStats.normalized++;
+      } else if (row.field_name === 'mention_person' || row.field_name === 'mention_place') {
+        // People and places MENTIONED in the letter (Merking) — resolved
+        // place mentions carry coordinates via mention_resolved rows
+        corr.mentions = corr.mentions || [];
+        try {
+          const m = JSON.parse(row.new_value);
+          corr.mentions.push({ _cid: row.id, kind: row.field_name.replace('mention_', ''),
+            text: m.text, name: m.name, region: !!m.region, lat: m.lat, lon: m.lon });
+        } catch (e) { /* skip malformed */ }
+      } else if (row.field_name === 'mention_resolved') {
+        try {
+          const r = JSON.parse(row.new_value);
+          corr.mention_resolutions = corr.mention_resolutions || {};
+          corr.mention_resolutions[r.mention_correction_id] = r.place;
+        } catch (e) { /* skip */ }
       } else if (row.field_name === 'place_uncertain') {
         corr.uncertain = true;
         correctionStats.uncertain++;
@@ -236,6 +257,20 @@ function convertLetter(letter) {
     noter: t(content.editorial_notes || ''),
     fotnoter: t(content.footnotes || ''),
     Tillegg: t(content.additional_notes || ''),
+    nevnte: (() => {
+      const c = corrections.get(letter.id);
+      if (!c || !c.mentions || c.mentions.length === 0) return null;
+      return c.mentions.map((m) => {
+        const res = c.mention_resolutions && c.mention_resolutions[m._cid];
+        if (res) {
+          const parts = res.split('|');
+          m = { ...m, name: parts[0], region: parts[2] === 'region' };
+          if (parts[1]) { const [la, lo] = parts[1].split(',').map(parseFloat); m.lat = la; m.lon = lo; }
+        }
+        const { _cid, ...out } = m;
+        return out;
+      });
+    })(),
     source: (letter.metadata || {}).source || '',
     cross_references: crossRefs.length > 0 ? crossRefs : null,
     // External URLs
@@ -275,7 +310,7 @@ const metadata = {
     'DN_dato', 'RN_dato', 'date_start', 'date_end', 'original_date',
     'DN_sted', 'RN_sted', 'DD_sted', 'SDHK_sted', 'DF_sted',
     'Normalized_name', 'lat', 'lon', 'uncertain_loc',
-    'brevtekst', 'oversettelse', 'tekstapparat', 'noter', 'fotnoter', 'Tillegg', 'source',
+    'brevtekst', 'oversettelse', 'tekstapparat', 'noter', 'fotnoter', 'Tillegg', 'nevnte', 'source',
     'src_id', 'related_sd_ids'
   ],
   synced_from: 'backend',

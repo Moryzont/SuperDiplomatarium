@@ -2045,3 +2045,6 @@ mark {
   gap: 0.25rem;
   flex-wrap: wrap;
 }
+
+.nevnt-chip { display: inline-block; padding: .05rem .5rem; margin: .1rem; border: 1px solid var(--c-olive); border-radius: 999px; font-size: .85rem; }
+.nevnt-uplassert { opacity: .55; border-style: dashed; }

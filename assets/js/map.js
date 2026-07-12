@@ -1,5 +1,6 @@
 /* global L, window, document */
 let map, markers, drawnItems;
+let mentionLayer = null;  // connections from a selected letter to its mentioned places
 let lettersData = [];
 const fullDataCache = new Map();
 const fullChunksLoaded = new Set();
@@ -76,6 +77,22 @@ async function loadLettersForMap() {
         const full = await loadFullData(letter.i);
         const summary = truncate(full?.sammendrag || full?.regest || '', 150);
         if (summary) ev.popup.setContent(renderMapPopup(letter, summary));
+        // Draw connections to the places mentioned in this letter
+        if (mentionLayer) { map.removeLayer(mentionLayer); mentionLayer = null; }
+        const mentions = (full?.nevnte || []).filter((m) => m.lat != null && m.lon != null);
+        if (mentions.length > 0) {
+          mentionLayer = L.layerGroup();
+          for (const m of mentions) {
+            L.polyline([[letter.la, letter.lo], [m.lat, m.lon]],
+              { color: '#8c2f1b', weight: 1.5, opacity: .65, dashArray: '4,4' }).addTo(mentionLayer);
+            L.circleMarker([m.lat, m.lon], { radius: 6, color: '#8c2f1b', weight: 2, fillOpacity: .15 })
+              .bindTooltip(`${m.region ? '▦' : '📍'} ${m.name || m.text} — nevnt i brevet`).addTo(mentionLayer);
+          }
+          mentionLayer.addTo(map);
+        }
+      });
+      marker.on('popupclose', () => {
+        if (mentionLayer) { map.removeLayer(mentionLayer); mentionLayer = null; }
       });
       letter.__marker = marker;
       markerList.push(marker);
