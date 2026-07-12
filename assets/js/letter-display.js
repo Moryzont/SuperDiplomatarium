@@ -650,7 +650,9 @@ function renderLetterDetails(full) {
   if (full.cross_references && Array.isArray(full.cross_references) && full.cross_references.length > 0) {
     const crossRefs = full.cross_references
       .filter(cr => cr.ref)
-      .map(cr => cr.ref);
+      .map(cr => cr.ref)
+      // extractor garbage: collapsed archive signums and volume-zero refs
+      .filter(r => !/^(?:RA|NRA|DRA|Est)_\d+$|^DN_00_/.test(r));
 
     if (crossRefs.length > 0) {
       footer += `<div class="detail-section"><em>Kryssreferanser:</em> ${escapeHtml(crossRefs.join(' | '))}</div>`;
