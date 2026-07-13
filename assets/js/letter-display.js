@@ -582,7 +582,7 @@ function renderLetterDetails(full) {
   // People and places mentioned in the letter (tagged in the curation tool)
   if (Array.isArray(full.nevnte) && full.nevnte.length > 0) {
     const chips = full.nevnte.map((m) => {
-      const icon = m.kind === 'person' ? '👤' : m.region ? '▦' : '📍';
+      const icon = m.kind === 'person' ? '●' : m.region ? '▦' : '⌖';
       const label = escapeHtml(m.name || m.text);
       return (m.lat != null && m.lon != null)
         ? `<span class="nevnt-chip" title="${m.lat}, ${m.lon}">${icon} ${label}</span>`
@@ -594,6 +594,11 @@ function renderLetterDetails(full) {
   // Add tillegg if present
   if (full.Tillegg?.trim()) {
     continuation += `<div class="detail-section"><em>Tillegg:</em> ${escapeHtml(full.Tillegg)}</div>`;
+  }
+
+  // Language (curator tag, or the source's own statement)
+  if (full.language?.trim()) {
+    continuation += `<div class="detail-section"><em>Språk:</em> ${escapeHtml(full.language)}</div>`;
   }
 
   // === FOOTER (Source data + Kilder + More section) ===

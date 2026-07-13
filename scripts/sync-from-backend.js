@@ -91,6 +91,9 @@ if (fs.existsSync(CORRECTIONS_DB)) {
       } else if (row.field_name === 'place_no_location') {
         corr.no_location = true;
         correctionStats.no_location++;
+      } else if (row.field_name === 'language') {
+        // curator language tag; latest row wins, '' clears the tag
+        corr.language = row.new_value || null;
       }
     }
 
@@ -271,6 +274,7 @@ function convertLetter(letter) {
         return out;
       });
     })(),
+    language: ((corrections.get(letter.id) || {}).language) || letter.language || '',
     source: (letter.metadata || {}).source || '',
     cross_references: crossRefs.length > 0 ? crossRefs : null,
     // External URLs
@@ -310,7 +314,7 @@ const metadata = {
     'DN_dato', 'RN_dato', 'date_start', 'date_end', 'original_date',
     'DN_sted', 'RN_sted', 'DD_sted', 'SDHK_sted', 'DF_sted',
     'Normalized_name', 'lat', 'lon', 'uncertain_loc',
-    'brevtekst', 'oversettelse', 'tekstapparat', 'noter', 'fotnoter', 'Tillegg', 'nevnte', 'source',
+    'brevtekst', 'oversettelse', 'tekstapparat', 'noter', 'fotnoter', 'Tillegg', 'nevnte', 'language', 'source',
     'src_id', 'related_sd_ids'
   ],
   synced_from: 'backend',
