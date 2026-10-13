@@ -1,0 +1,6 @@
+# Staging overrides. Used by the deploy workflow for the `staging` branch:
+#   jekyll build --config _config.yaml,_config_staging.yaml
+# Publishes to https://moryzont.github.io/SuperDiplomatarium-staging/
+# Everything else (design, data, scripts) is identical to production.
+baseurl: "/SuperDiplomatarium-staging"
+staging: true   # adds a "testversjon" banner and <meta name="robots" content="noindex">

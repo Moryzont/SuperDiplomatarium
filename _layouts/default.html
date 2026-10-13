@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% if page.title %}{{ page.title }} | {% endif %}{{ site.title | default: "SuperDiplomatarium" }}</title>
   <meta name="description" content="{{ page.description | default: site.description | default: 'Digital forskningsportal for norske middelalderbrev' }}">
-
+{% if site.staging %}  <meta name="robots" content="noindex, nofollow">
+{% endif %}
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,7 +20,8 @@
   <script src="{{ '/assets/js/i18n.js' | relative_url }}"></script>
 </head>
 <body>
-  <header class="site-header">
+{% if site.staging %}  <div style="background:#b45309;color:#fff;text-align:center;padding:6px 16px;font:600 14px/1.4 Inter,sans-serif">Testversjon (staging) – ikke den offentlige nettsiden. Den finner du på <a href="https://moryzont.github.io/SuperDiplomatarium/" style="color:#fff;text-decoration:underline">moryzont.github.io/SuperDiplomatarium</a>.</div>
+{% endif %}  <header class="site-header">
     <nav class="navbar">
       <div class="container">
         <a href="{{ '/' | relative_url }}" class="brand" aria-label="SuperDiplomatarium">

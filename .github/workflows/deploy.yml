@@ -1,34 +1,71 @@
+# Build and deploy the site. One workflow, two targets:
+#   push to `staging` -> https://moryzont.github.io/SuperDiplomatarium-staging/
+#   push to `main`    -> https://moryzont.github.io/SuperDiplomatarium/  (production)
+# Same build both ways; only the Jekyll baseurl and the deploy step differ.
+# Promotion = merge staging into main. See superdiplomatarium-app/docs/PLAN.md §4.
 name: Build and deploy site
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   workflow_dispatch:
 permissions:
   contents: read
   pages: write
   id-token: write
-concurrency: { group: pages, cancel-in-progress: true }
+concurrency: { group: "pages-${{ github.ref_name }}", cancel-in-progress: true }
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
-    environment: { name: github-pages, url: "${{ steps.deployment.outputs.page_url }}" }
+    environment:
+      name: ${{ github.ref_name == 'main' && 'github-pages' || 'staging' }}
+      url: ${{ github.ref_name == 'main' && steps.deployment.outputs.page_url || 'https://moryzont.github.io/SuperDiplomatarium-staging/' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20 }
+        with: { node-version: 20, cache: npm }
       - uses: ruby/setup-ruby@v1
-        with: { ruby-version: '3.2', bundler-cache: false }
-      - run: gem install jekyll
-      - run: npm ci || npm install
-      - run: node scripts/build-search-v3.mjs   # v3 indexes + map + optimized from data/chunks
-      - run: jekyll build
-      - run: cp -r data/v3 data/optimized _site/data/ && mkdir -p _site/data && true
-      - name: Assemble site data
+        with: { ruby-version: '3.3' }
+      - run: gem install jekyll --no-document
+      - run: npm ci
+
+      - name: Build search indexes, map data and detail store (from data/chunks)
+        run: node scripts/build-search-v3.mjs
+
+      - name: Jekyll build (production)
+        if: github.ref_name == 'main'
+        run: jekyll build
+      - name: Jekyll build (staging)
+        if: github.ref_name == 'staging'
+        run: jekyll build --config _config.yaml,_config_staging.yaml
+
+      - name: Assemble site data and check the 1 GB Pages limit
         run: |
           mkdir -p _site/data
           cp -r data/v3 _site/data/v3
           cp -r data/optimized _site/data/optimized
-      - uses: actions/upload-pages-artifact@v3
+          cp data/metadata.json _site/data/metadata.json
+          bytes=$(du -sb _site | cut -f1)
+          echo "site: $(find _site -type f | wc -l) files, $((bytes / 1048576)) MB"
+          test "$bytes" -lt 1000000000 || { echo "::error::site exceeds the 1 GB GitHub Pages limit"; exit 1; }
+
+      # --- production: GitHub Pages of this repo
+      - name: Upload Pages artifact
+        if: github.ref_name == 'main'
+        uses: actions/upload-pages-artifact@v3
         with: { path: _site }
-      - id: deployment
+      - name: Deploy to production
+        if: github.ref_name == 'main'
+        id: deployment
         uses: actions/deploy-pages@v4
+
+      # --- staging: push the built site to the staging repo's gh-pages branch
+      - name: Deploy to staging
+        if: github.ref_name == 'staging'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          deploy_key: ${{ secrets.STAGING_DEPLOY_KEY }}
+          external_repository: Moryzont/SuperDiplomatarium-staging
+          publish_branch: gh-pages
+          publish_dir: ./_site
+          force_orphan: true
+          commit_message: "Staging deploy from SuperDiplomatarium@${{ github.sha }}"

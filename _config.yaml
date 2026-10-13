@@ -10,13 +10,26 @@ baseurl: "/SuperDiplomatarium"         # LEADING slash, NO trailing slash
 markdown: kramdown
 encoding: utf-8
 
-# Exclude files from build
+# Exclude files from build. The data tree is NOT copied by Jekyll: the deploy
+# workflow (and serve-local) place data/v3, data/optimized and
+# data/metadata.json into _site/data explicitly. data/chunks is build input
+# only and must never be published.
 exclude:
   - README.md
+  - SEARCH-V3.md
   - Gemfile
   - Gemfile.lock
   - .gitignore
-  - letters.csv   
+  - letters.csv
+  - data
+  - node_modules
+  - scripts
+  - tests
+  - package.json
+  - package-lock.json
+  - build.sh
+  - _config_local.yaml
+  - _config_staging.yaml
   
 # Collections (optional for now)
 collections:
