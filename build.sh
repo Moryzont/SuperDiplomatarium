@@ -25,8 +25,10 @@ for arg in "$@"; do
 done
 
 if [ "$DO_SYNC" == "1" ]; then
-    echo "=== Step 1/3: Sync from backend (applies corrections.db) ==="
-    node scripts/sync-from-backend.js
+    echo "=== Step 1/3: Sync from the canonical store (rebuilds it from pipeline output + corrections.db, exports, gates) ==="
+    # Since 2026-10-13 the site data comes from the app repo's store, not from
+    # scripts/sync-from-backend.js (kept for reference; superseded).
+    (cd .. && PYTHONPATH=.:src python3 site/build/sync_site.py --pages "$DIR")
 else
     echo "=== Step 1/3: Skipping sync (use --sync to refresh from backend) ==="
 fi

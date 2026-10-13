@@ -40,8 +40,10 @@
     "language",
     "source",
     "src_id",
-    "related_sd_ids"
+    "related_sd_ids",
+    "document_id"
   ],
-  "synced_from": "backend",
-  "synced_at": "2026-10-13T15:03:32.487Z"
+  "synced_from": "store",
+  "store": "/Users/vetlewisloffsandring/Documents/GitHub/superdiplomatarium-app/data/store/superdiplomatarium.db",
+  "synced_at": "2026-10-13T16:37:30+00:00"
 }
