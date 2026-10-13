@@ -20,6 +20,7 @@ tests/temp-*
 # also exclude them by uncommenting:
 # data/chunks/
 
-# Search v3 generated artifacts (rebuild with: node scripts/build-search-v3.mjs)
+# Search v3 generated artifacts (rebuild with: node scripts/build-search-v3.mjs; CI builds them on deploy)
 data/v3/
+data/optimized/
 node_modules/
