@@ -1,5 +1,5 @@
 {
-  "total_letters": 106997,
+  "total_letters": 106986,
   "chunks": 107,
   "chunk_size": 1000,
   "fields": [
@@ -31,12 +31,17 @@
     "lon",
     "uncertain_loc",
     "brevtekst",
+    "oversettelse",
+    "tekstapparat",
+    "noter",
     "fotnoter",
     "Tillegg",
+    "nevnte",
+    "language",
     "source",
     "src_id",
     "related_sd_ids"
   ],
   "synced_from": "backend",
-  "synced_at": "2026-06-12T11:48:18.404Z"
+  "synced_at": "2026-10-13T15:03:32.487Z"
 }
