@@ -15,7 +15,7 @@ permissions:
 concurrency: { group: "pages-${{ github.ref_name }}", cancel-in-progress: true }
 jobs:
   build-deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: ${{ github.ref_name == 'main' && 'github-pages' || 'staging' }}
       url: ${{ github.ref_name == 'main' && steps.deployment.outputs.page_url || 'https://moryzont.github.io/SuperDiplomatarium-staging/' }}
