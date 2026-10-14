@@ -1,10 +1,15 @@
 ---
 layout: default
 title: SuperDiplomatarium
-letters_count: 25011
+letters_count: 106986   # fallback only; the build copies data/metadata.json to _data/ and the live count comes from there
 period_start: c1000
 period_end: c1570
 ---
+{%- assign n = site.data.metadata.total_letters | default: page.letters_count -%}
+{%- assign thousands = n | divided_by: 1000 -%}
+{%- assign rest = n | modulo: 1000 -%}
+{%- if rest < 10 -%}{%- assign rest_s = rest | prepend: "00" -%}{%- elsif rest < 100 -%}{%- assign rest_s = rest | prepend: "0" -%}{%- else -%}{%- assign rest_s = rest -%}{%- endif -%}
+{%- capture letters_count_formatted -%}{{ thousands }}&nbsp;{{ rest_s }}{%- endcapture -%}
 
 <section class="fig-landing">
   <div class="container">
@@ -15,7 +20,7 @@ period_end: c1570
 
       <p class="fig-lead">
         Utforsk diplomsamlingen med en ny søkemotor, normaliserte stedsnavn
-        og ved hjelp av kart. Samlingen inneholder {{ page.letters_count }} diplomer,
+        og ved hjelp av kart. Samlingen inneholder {{ letters_count_formatted }} diplomer,
         fra omtrent år {{ page.period_start }} til rett før {{ page.period_end }}.
       </p>
 

@@ -41,6 +41,9 @@ jobs:
       - name: Build search indexes, map data and detail store (from data/chunks)
         run: node scripts/build-search-v3.mjs
 
+      - name: Expose the letter count to Jekyll (front page reads site.data.metadata)
+        run: mkdir -p _data && cp data/metadata.json _data/metadata.json
+
       - name: Jekyll build (production)
         if: github.ref_name == 'main'
         run: jekyll build

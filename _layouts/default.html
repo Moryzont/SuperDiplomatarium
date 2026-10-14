@@ -27,8 +27,8 @@
         <a href="{{ '/' | relative_url }}" class="brand" aria-label="SuperDiplomatarium">
           <span class="brand-initial">S</span><span class="brand-rest">uperDiplomatarium</span>
         </a>
-        <button class="nav-toggle" aria-label="Meny">☰</button>
-        <ul class="nav-links">
+        <button class="nav-toggle" type="button" aria-label="Meny" aria-expanded="false" aria-controls="nav-links">☰</button>
+        <ul class="nav-links" id="nav-links">
           <li><a href="{{ '/sok/'  | relative_url }}" data-i18n="nav.search">Søk</a></li>
           <li><a href="{{ '/kart/' | relative_url }}" data-i18n="nav.map">Kart</a></li>
           <li><a href="{{ '/om/'   | relative_url }}" data-i18n="nav.about">Om samlingen</a></li>
@@ -47,5 +47,16 @@
       <p> {{ "now" | date: "%Y" }} Vetle Lars Wisløff Sandring</p>
     </div>
   </footer>
+  <script>
+    // Mobile menu: the ☰ button (shown by CSS under 640px) opens and closes the nav links.
+    (function () {
+      var btn = document.querySelector('.nav-toggle'), links = document.getElementById('nav-links');
+      if (!btn || !links) return;
+      btn.addEventListener('click', function () {
+        var open = links.classList.toggle('is-open');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+    })();
+  </script>
 </body>
 </html>

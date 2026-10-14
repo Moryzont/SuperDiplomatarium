@@ -36,6 +36,7 @@ fi
 echo ""
 echo "=== Step 2/3: Build search indexes, map data and full-record store ==="
 env $SMOKE node scripts/build-search-v3.mjs
+mkdir -p _data && cp data/metadata.json _data/metadata.json   # front page reads the letter count from here
 
 echo ""
 echo "=== Step 3/3: Size check (GitHub hard limit: 100MB per file) ==="

@@ -27,3 +27,6 @@ node_modules/
 
 # The letter chunks are published as a release asset (see data/chunks.manifest.json), not committed
 data/chunks/
+
+# Copied from data/metadata.json by build.sh / the deploy workflow (front page letter count)
+_data/metadata.json
