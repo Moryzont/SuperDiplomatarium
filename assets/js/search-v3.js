@@ -371,18 +371,15 @@ async function pfSearch(indexName, query, opts) {
 function arrayResults(handles) {
   return {
     length: handles.length,
+    queues: handles.length ? [handles] : [],
     async get(a, b) { return handles.slice(a, b); },
     async all() { return handles; }
   };
 }
 
-// Merge several Pagefind result arrays that were each sorted with the same
-// sort option, keeping that order. Pagefind does not expose sort keys, so the
-// merge resolves only the heads of the queues (small fragment files) and
-// takes the smallest; a page of 20 results costs ~20 + k fragment fetches.
-// `keep`: a Set of result ids (null = all); a result id occurring in several
-// arrays is taken once.
-function mergedResults(lists, keep, sortMode) {
+// Pagefind result arrays -> queues of handles. `keep`: a Set of result ids
+// (null = all); a result id occurring in several arrays is taken once.
+function pfQueues(lists, keep) {
   const seen = new Set();
   const queues = [];
   for (const list of lists) {
@@ -394,8 +391,21 @@ function mergedResults(lists, keep, sortMode) {
     }
     if (q.length) queues.push(q);
   }
+  return queues;
+}
+
+// Merge several queues of handles that are each in the chosen sort order,
+// keeping that order. Pagefind does not expose sort keys, so the merge
+// resolves only the heads of the queues (small fragment files) and takes
+// the smallest; a page of 20 results costs ~20 + k fragment fetches. A
+// letter reached through several queues (the "Alt" field searches three
+// indexes) is shown once; the length is an upper bound until the merge has
+// run through everything, then it is exact.
+function mergedResults(queues, sortMode) {
+  queues = queues.filter(q => q.length);
   const heads = queues.map(() => 0);
   const out = [];
+  const shown = new Set();
   const before = sortMode === 'date-desc'
     ? (x, y) => (x.ds || '\u0000') > (y.ds || '\u0000')          // newest first, undated last
     : sortMode === 'completeness'
@@ -419,14 +429,18 @@ function mergedResults(lists, keep, sortMode) {
       }
       const j = live[best];
       const h = queues[j][heads[j]++];
-      if (headLetters[best]) out.push(h);
+      const letter = headLetters[best];
+      if (letter && !shown.has(letter.i)) { shown.add(letter.i); out.push(h); }
     }
+    if (queues.every((q, j) => heads[j] >= q.length)) list.length = out.length;
   }
-  return {
-    length: seen.size,
+  const list = {
+    length: queues.reduce((n, q) => n + q.length, 0),
+    queues,
     async get(a, b) { await fill(b); return out.slice(a, b); },
     async all() { await fill(Infinity); return out; }
   };
+  return list;
 }
 
 // ===================== Fuzzy search =====================
@@ -560,7 +574,7 @@ async function searchIndex(indexName, rawQuery, opts) {
     }
     lists.push(...results);
   }
-  return mergedResults(lists, keep, getSortMode());
+  return mergedResults(pfQueues(lists, keep), getSortMode());
 }
 
 // ===================== Core-table search (IDs) =====================
@@ -675,15 +689,17 @@ async function performSearch() {
     } else if (searchField === 'place') {
       results = await searchIndex('place', rawQuery, buildPfOptions());
     } else if (searchField === 'all') {
-      // Text + place + fulltext + ID substring, deduplicated by index order of priority
+      // Text + place + fulltext + ID substring, merged in sort order; a letter
+      // found in several indexes is shown once (dedupe happens as pages are
+      // resolved, so the count can shrink on the last page)
       const opts = buildPfOptions();
-      const [main, place, fulltext] = await Promise.all([
-        searchIndex('main', rawQuery, opts).then(l => l.all()),
-        searchIndex('place', rawQuery, opts).then(l => l.all()),
-        searchIndex('fulltext', rawQuery, opts).then(l => l.all())
+      const [main, place, fulltext, idHits] = await Promise.all([
+        searchIndex('main', rawQuery, opts),
+        searchIndex('place', rawQuery, opts),
+        searchIndex('fulltext', rawQuery, opts),
+        coreIdSearch(rawQuery)
       ]);
-      const idHits = await coreIdSearch(rawQuery);
-      results = arrayResults(await dedupeHandles([...main, ...idHits, ...place, ...fulltext]));
+      results = mergedResults([...main.queues, idHits, ...place.queues, ...fulltext.queues], getSortMode());
     }
 
     if (seq !== STATE.activeSearchSeq) return;
@@ -748,8 +764,10 @@ async function renderPage() {
   // the related-source toggles on a card need the core table
   if (letters.some(l => l.rel && l.rel.length)) await ensureCore();
 
-  await updateResultsView(letters, start + 1, end, total);
-  renderPagination(total);
+  // a merged list learns its exact length when it has run through everything
+  const exactTotal = STATE.currentResults.length;
+  await updateResultsView(letters, start + 1, Math.min(end, exactTotal), exactTotal);
+  renderPagination(exactTotal);
 }
 
 function escapeHtml(s) {
