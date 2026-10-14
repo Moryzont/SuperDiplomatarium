@@ -44,10 +44,10 @@ data/optimized/full-XX.json           full records for the detail view (unchange
   active (v2 included them).
 - Word-based matching with Norwegian stemming + prefix matching instead of raw
   substring matching (regests only; letter texts and place names are not stemmed).
-- Fuzzy search (Søkemodus: Uskarpt, the default, as on the 2025 site) is done
-  client-side: each query word is expanded to the corpus spellings within a
-  small edit distance (`fuzzyCandidates`: distance 1 from 5 letters, 2 from 9;
-  "vid" allows one more), every candidate is its own Pagefind search and the
+- Fuzzy search (the Fuzzy control: on by default as on the 2025 site, with a
+  Fuzzy-nivå slider moderat / vid / svært vid) is done client-side: each query word is expanded to the corpus spellings within a
+  small edit distance (`fuzzyCandidates`: moderat = distance 1 from 5 letters,
+  2 from 9; vid = 1 from 3, 2 from 6, 3 from 11; svært vid = 1/2/3 from 3/5/9), every candidate is its own Pagefind search and the
   result sets are merged in the chosen sort order (`mergedResults`, which
   resolves only the heads of the queues). A word with 3,000+ exact hits is not
   expanded — Pagefind's cost grows with the result count and the variants of

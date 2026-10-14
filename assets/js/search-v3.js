@@ -466,20 +466,25 @@ function mergedResults(queues, sortMode) {
 const FUZZY = {
   index: null,            // vocab/index.json: letter -> [lengths]
   buckets: new Map(),     // "letter/len" -> Promise<[word, count][]>
-  maxCandidates: { 1: 5, 2: 8 },
+  maxCandidates: { 1: 5, 2: 8, 3: 12 },
   expandBelow: 3000,      // no variant searches for a word with this many exact hits
   // first letters that are often interchangeable in the sources; a query word's
   // first letter is also looked up in these buckets
   firstLetterGroups: [['c', 'k', 'q'], ['v', 'w', 'u', 'f'], ['i', 'j', 'y'], ['æ', 'e', 'ä'], ['ø', 'o', 'ö'], ['å', 'a'], ['t', 'þ', 'd'], ['s', 'z'], ['b', 'p'], ['g', 'k']]
 };
 
+// 0 = off, 1 = moderat, 2 = vid, 3 = svært vid (the Fuzzy-nivå slider)
 function fuzzyLevel() {
-  const v = document.getElementById('search-mode')?.value || 'fuzzy';
-  return v === 'fuzzy2' ? 2 : v === 'fuzzy' ? 1 : 0;
+  const on = document.getElementById('fuzzy-on');
+  if (on && !on.checked) return 0;
+  return parseInt(document.getElementById('fuzzy-distance')?.value || '1', 10) || 1;
 }
 
+const FUZZY_LEVEL_NAMES = { 1: 'Moderat', 2: 'Vid', 3: 'Svært vid' };
+
 function fuzzyMaxDistance(len, level) {
-  if (level >= 2) return len >= 11 ? 3 : len >= 6 ? 2 : len >= 3 ? 1 : 0;
+  if (level >= 3) return len >= 9 ? 3 : len >= 5 ? 2 : len >= 3 ? 1 : 0;
+  if (level === 2) return len >= 11 ? 3 : len >= 6 ? 2 : len >= 3 ? 1 : 0;
   return len >= 9 ? 2 : len >= 5 ? 1 : 0;
 }
 
@@ -1174,7 +1179,16 @@ function wireListeners() {
 
   // Sorting is index-side, so a sort change re-runs the query
   document.getElementById('sort-mode')?.addEventListener('change', performSearch);
-  document.getElementById('search-mode')?.addEventListener('change', performSearch);
+  const fuzzyOn = document.getElementById('fuzzy-on');
+  const fuzzySlider = document.getElementById('fuzzy-distance');
+  const fuzzyLabel = document.getElementById('fuzzy-label');
+  const syncFuzzyControls = () => {
+    document.getElementById('fuzzy-controls')?.classList.toggle('is-off', !!fuzzyOn && !fuzzyOn.checked);
+    if (fuzzyLabel && fuzzySlider) fuzzyLabel.textContent = FUZZY_LEVEL_NAMES[fuzzySlider.value] || '';
+  };
+  syncFuzzyControls();
+  fuzzyOn?.addEventListener('change', () => { syncFuzzyControls(); performSearch(); });
+  fuzzySlider?.addEventListener('input', () => { syncFuzzyControls(); debounced(); });
 
   const df = document.getElementById('date-from');
   const dt = document.getElementById('date-to');

@@ -59,14 +59,15 @@ permalink: /sok/
         </div>
       </details>
       <details class="search-mode">
-        <summary>Søkemodus</summary>
+        <summary>Fuzzy</summary>
         <div class="mode-content">
-          <select id="search-mode" class="sort-select" title="Uskarpt søk finner også ord som er stavet litt annerledes">
-            <option value="fuzzy">Uskarpt (moderat)</option>
-            <option value="fuzzy2">Uskarpt (vid)</option>
-            <option value="exact">Eksakt</option>
-          </select>
-          <p class="mode-hint">Uskarpt søk finner også ord som er stavet litt annerledes, f.eks. <code>Kaytala</code> for <code>Caytala</code>. Gjelder ikke referansesøk.</p>
+          <label class="db-checkbox"><input type="checkbox" id="fuzzy-on" checked> Fuzzy-søk</label>
+          <div id="fuzzy-controls" class="fuzzy-controls">
+            <label for="fuzzy-distance">Fuzzy-nivå:</label>
+            <input type="range" id="fuzzy-distance" min="1" max="3" value="1" step="1" class="fuzzy-slider">
+            <span id="fuzzy-label" class="fuzzy-label">Moderat</span>
+          </div>
+          <p class="mode-hint">Fuzzy-søk finner også ord som er stavet litt annerledes, f.eks. <code>Kaytala</code> for <code>Caytala</code>. Høyere nivå tillater flere avvik, men gir flere irrelevante treff. Gjelder ikke referansesøk.</p>
         </div>
       </details>
       <details class="search-sorting">
