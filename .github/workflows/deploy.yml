@@ -20,8 +20,8 @@ jobs:
       name: ${{ github.ref_name == 'main' && 'github-pages' || 'staging' }}
       url: ${{ github.ref_name == 'main' && steps.deployment.outputs.page_url || 'https://moryzont.github.io/SuperDiplomatarium-staging/' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with: { node-version: 20, cache: npm }
       - uses: ruby/setup-ruby@v1
         with: { ruby-version: '3.3' }
