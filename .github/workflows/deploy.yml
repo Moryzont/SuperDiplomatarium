@@ -28,6 +28,16 @@ jobs:
       - run: gem install jekyll --no-document
       - run: npm ci
 
+      - name: Fetch the letter chunks (release asset named in data/chunks.manifest.json)
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          tag=$(python3 -c "import json; print(json.load(open('data/chunks.manifest.json'))['tag'])")
+          sha=$(python3 -c "import json; print(json.load(open('data/chunks.manifest.json'))['sha256'])")
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern chunks.tar.gz --output chunks.tar.gz
+          echo "$sha  chunks.tar.gz" | sha256sum -c -
+          rm -rf data/chunks && tar -xzf chunks.tar.gz -C data && rm chunks.tar.gz
+          echo "chunks: $(ls data/chunks | wc -l) files from $tag"
+
       - name: Build search indexes, map data and detail store (from data/chunks)
         run: node scripts/build-search-v3.mjs
 

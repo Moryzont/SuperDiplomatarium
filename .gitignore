@@ -24,3 +24,6 @@ tests/temp-*
 data/v3/
 data/optimized/
 node_modules/
+
+# The letter chunks are published as a release asset (see data/chunks.manifest.json), not committed
+data/chunks/
