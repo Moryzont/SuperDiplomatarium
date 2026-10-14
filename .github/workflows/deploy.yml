@@ -95,7 +95,8 @@ jobs:
           external_repository: Moryzont/SuperDiplomatarium-staging
           publish_branch: gh-pages
           publish_dir: ./_site
-          # No force_orphan: an orphan commit re-hashes and re-uploads all 256k
-          # files (11 min); an ordinary commit carries only what changed, and
-          # Pagefind's files are content-hashed, so unchanged data is free.
+          # Measured 2026-10-14: an orphan commit of the 256k files takes ~11 min;
+          # an incremental commit (clone of the existing branch + diff) took 52 min.
+          # So orphan it stays; the time saver is the build cache above.
+          force_orphan: true
           commit_message: "Staging deploy from SuperDiplomatarium@${{ github.sha }}"
