@@ -71,7 +71,8 @@ async function loadLettersForMap() {
       lettersData.push(letter);
 
       const marker = L.marker([letter.la, letter.lo]);
-      marker.bindPopup(renderMapPopup(letter));
+      // popup HTML is built when the popup opens, not for all 63k markers up front
+      marker.bindPopup(() => renderMapPopup(letter));
       // Summaries are not in map.json; fetch the full record when a popup opens
       marker.on('popupopen', async (ev) => {
         const full = await loadFullData(letter.i);
