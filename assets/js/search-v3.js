@@ -90,6 +90,7 @@ async function initializeSearch() {
     updateStatus('Kunne ikke laste data. Prøv å laste siden på nytt.', true);
   });
   STATE.isLoading = false;
+  warmIndexes(getSearchField());
   try {
     const res = await fetch(`${BASE()}/data/metadata.json`);
     const meta = res.ok ? await res.json() : null;
@@ -106,6 +107,19 @@ async function initializeSearch() {
 
 async function ensureCore() {
   return STATE.core || STATE.corePromise;
+}
+
+// Which Pagefind indexes a search field uses.
+function indexesFor(field) {
+  return field === 'text' ? ['main'] : field === 'fulltext' ? ['fulltext'] : field === 'place' ? ['place']
+    : field === 'all' ? ['main', 'place', 'fulltext'] : [];
+}
+
+// The first search on an index pays for its worker, wasm and a ~1.5 MB
+// metadata file; fetching those as soon as the field is known (page load,
+// field change) takes that wait out of the first search.
+function warmIndexes(field) {
+  for (const name of indexesFor(field)) getIndex(name).catch(() => {});
 }
 
 // Deep links: /sok/?id=SD20011494 or ?q=...&felt=...
@@ -1119,9 +1133,19 @@ function wireListeners() {
   const input = document.getElementById('search-input');
   const button = document.getElementById('search-btn');
 
+  // While the user types, Pagefind only *preloads* the index chunks for the
+  // prefix typed so far; the search itself runs after a pause and from three
+  // letters on (every prefix used to be searched: "bis" alone costs seconds
+  // of ranking for 16,000 hits, and the searches queued up behind each other).
   const debounced = () => {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(performSearch, 250);
+    const q = (input?.value || '').trim();
+    const field = getSearchField();
+    if (q && field !== 'id') {
+      for (const name of indexesFor(field)) getIndex(name).then(pf => pf.preload(q)).catch(() => {});
+    }
+    if (q.length > 0 && q.length < 3) return;
+    debounceTimer = setTimeout(performSearch, 400);
   };
 
   if (input) {
@@ -1143,6 +1167,7 @@ function wireListeners() {
         };
         input.placeholder = placeholders[fieldSelect.value] || 'Søk...';
       }
+      warmIndexes(fieldSelect.value);
       performSearch();
     });
   }
