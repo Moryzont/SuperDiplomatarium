@@ -51,7 +51,28 @@ const C = { id: 0, d: 1, r: 2, sdhk: 3, dd: 4, df: 5, src: 6, ds: 7, de: 8, rel:
 window.__SD_STATE = STATE;
 
 // ===================== Initialization =====================
+// The panel names (Søketips, Filtre, Fuzzy, Sortering) must stay on one row;
+// a <details> grows to its content's width, so each panel's content is moved
+// into a container below the row and shown while its <details> is open.
+function liftPanels() {
+  const row = document.querySelector('.search-options-row');
+  if (!row || row.dataset.lifted) return;
+  row.dataset.lifted = '1';
+  const panels = document.createElement('div');
+  panels.className = 'search-options-panels';
+  row.after(panels);
+  for (const d of row.querySelectorAll(':scope > details')) {
+    const box = document.createElement('div');
+    box.className = 'search-options-panel';
+    box.hidden = !d.open;
+    for (const child of [...d.children]) if (child.tagName !== 'SUMMARY') box.appendChild(child);
+    panels.appendChild(box);
+    d.addEventListener('toggle', () => { box.hidden = !d.open; });
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+  liftPanels();
   await initializeSearch();
   wireListeners();
   wireResultsList();
