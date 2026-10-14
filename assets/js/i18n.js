@@ -29,13 +29,8 @@ const TRANSLATIONS = {
     'tips.title': 'Søketips',
     'tips.id': 'Referanse/ID:',
     'tips.id.examples': 'DN XII 251, DN12000251, SD20011494, SDHK 1234',
-    'tips.text': 'Tekst:',
-    'tips.text.desc': 'Søk i sammendrag og regest',
-    'tips.place': 'Sted:',
-    'tips.place.desc': 'Søk etter stedsnavn',
 
     // Filters
-    'filters.title': 'Filtre og sortering',
     'filters.date': 'Datoperiode:',
     'filters.from': 'Fra (YYYY)',
     'filters.to': 'Til (YYYY)',
@@ -47,7 +42,6 @@ const TRANSLATIONS = {
     // Results
     'results.loading': 'Laster inn...',
     'results.searching': 'Søker...',
-    'results.ready': 'brev klare for søk!',
     'results.hits': 'treff',
     'results.showing': 'Viser',
     'results.of': 'av',
@@ -59,16 +53,12 @@ const TRANSLATIONS = {
     'letter.place': 'Sted:',
     'letter.summary': 'Sammendrag',
     'letter.regest': 'Regest',
-    'letter.body': 'Brevtekst',
     'letter.source': 'Kilde',
-    'letter.footnotes': 'Fotnoter',
     'letter.additional': 'Tillegg',
-    'letter.related': 'Relaterte dokumenter',
     'letter.external': 'Eksterne lenker',
     'letter.view.df': 'Vis i Diplomatarium Fennicum',
     'letter.show': 'Vis detaljer',
     'letter.hide': 'Skjul detaljer',
-    'letter.unknown.date': 'Ukjent',
     'letter.unknown.place': 'Ukjent sted',
 
     // Export
@@ -82,6 +72,69 @@ const TRANSLATIONS = {
     'page.last': 'Siste',
 
     // Language
+    // added 2026-10-14 for the complete English mode
+    'tips.ref': "Søk etter referanse:",
+    'tips.ref.desc': "Velg «Referanse / ID» og skriv f.eks.",
+    'tips.text': "Tekstsøk:",
+    'tips.text.desc': "Søk etter ord eller fraser i sammendrag. Eksempel:",
+    'tips.place': "Stedsøk:",
+    'tips.place.desc': "Velg «Sted» for å søke etter stedsnavn. Eksempel:",
+    'tips.date': "Datofilter:",
+    'tips.date.desc': "Bruk «Filtre» for å begrense til en tidsperiode, f.eks. 1200–1350",
+    'tips.source': "Kildefilter:",
+    'tips.source.desc': "Bruk «Filtre» for å begrense søket til bestemte diplomataria",
+    'filters.title': "Filtre",
+    'filters.sources': "Kilder:",
+    'sort.title': "Sortering",
+    'fuzzy.title': "Fuzzy",
+    'fuzzy.on': "Fuzzy-søk",
+    'fuzzy.level': "Fuzzy-nivå:",
+    'fuzzy.level.1': "Moderat",
+    'fuzzy.level.2': "Vid",
+    'fuzzy.level.3': "Svært vid",
+    'fuzzy.hint': "Fuzzy-søk finner også ord som er stavet litt annerledes, f.eks. Kaytala for Caytala. Høyere nivå tillater flere avvik, men gir flere irrelevante treff. Gjelder ikke referansesøk.",
+    'results.ready': "brev klare for søk.",
+    'results.loadError': "Kunne ikke laste data. Prøv å laste siden på nytt.",
+    'results.failed': "Søket feilet. Prøv på nytt.",
+    'results.stillLoading': "Laster fortsatt data, prøv igjen straks...",
+    'results.count': "{n} treff ({ms} ms)",
+    'results.showingRange': "Viser {from}-{to} av {total} treff",
+    'results.hitsN': "{n} treff",
+    'letter.unknown': "Ukjent",
+    'letter.body': "Brevtekst:",
+    'letter.translation': "Oversettelse:",
+    'letter.sources': "Kilder:",
+    'letter.footnotes': "Fotnoter:",
+    'letter.footnotesTitle': "Fotnoter",
+    'letter.mentions': "Nevnte:",
+    'letter.language': "Språk:",
+    'letter.related': "Relaterte:",
+    'letter.showOnMap': "Vis på kart",
+    'letter.uncertainLoc': "(usikker plassering)",
+    'letter.notPlaced': "ikke stedfestet ennå",
+    'letter.loading': "Laster...",
+    'letter.loadFailed': "Kunne ikke laste.",
+    'letter.detailsHint': "(Vis detaljer for innhold)",
+    'letter.unknown.date': "Ukjent dato",
+    'export.confirm': "Dette vil laste ned data for {n} treff og kan ta litt tid. Fortsette?",
+    'export.preparing': "Forbereder eksport av {n} treff...",
+    'export.progress': "Forbereder eksport... {done}/{total}",
+    'export.done': "{n} treff eksportert.",
+    'export.title': "Eksportér utvalg:",
+    'export.downloadTxt': "Last ned TXT",
+    'export.downloadCsv': "Last ned CSV",
+    'map.title': "Geografisk utforskning",
+    'map.draw': "Tegn område",
+    'map.clear': "Fjern valg",
+    'map.withPlace': "{n} brev med stedsinformasjon",
+    'map.inArea': "{n} brev i valgt område",
+    'map.noneInArea': "Ingen brev i valgt område",
+    'map.showLetter': "Vis brevet",
+    'map.mentioned': "nevnt i brevet",
+    'map.loadError': "Klarte ikke å laste kartdata.",
+    'letter.moreRelated': '{n} flere relaterte oppføringer',
+    'letter.clickToShow': 'klikk for å vise',
+    'letter.crossRefs': 'Kryssreferanser:',
     'lang.switch': 'English',
   },
 
@@ -110,13 +163,8 @@ const TRANSLATIONS = {
     'tips.title': 'Search tips',
     'tips.id': 'Reference/ID:',
     'tips.id.examples': 'DN XII 251, DN12000251, SD20011494, SDHK 1234',
-    'tips.text': 'Text:',
-    'tips.text.desc': 'Search in summaries and regests',
-    'tips.place': 'Place:',
-    'tips.place.desc': 'Search by place name',
 
     // Filters
-    'filters.title': 'Filters and sorting',
     'filters.date': 'Date range:',
     'filters.from': 'From (YYYY)',
     'filters.to': 'To (YYYY)',
@@ -128,7 +176,6 @@ const TRANSLATIONS = {
     // Results
     'results.loading': 'Loading...',
     'results.searching': 'Searching...',
-    'results.ready': 'letters ready to search!',
     'results.hits': 'results',
     'results.showing': 'Showing',
     'results.of': 'of',
@@ -140,16 +187,12 @@ const TRANSLATIONS = {
     'letter.place': 'Place:',
     'letter.summary': 'Summary',
     'letter.regest': 'Regest',
-    'letter.body': 'Letter text',
     'letter.source': 'Source',
-    'letter.footnotes': 'Footnotes',
     'letter.additional': 'Additional notes',
-    'letter.related': 'Related documents',
     'letter.external': 'External links',
     'letter.view.df': 'View in Diplomatarium Fennicum',
     'letter.show': 'Show details',
     'letter.hide': 'Hide details',
-    'letter.unknown.date': 'Unknown',
     'letter.unknown.place': 'Unknown place',
 
     // Export
@@ -163,6 +206,69 @@ const TRANSLATIONS = {
     'page.last': 'Last',
 
     // Language
+    // added 2026-10-14 for the complete English mode
+    'tips.ref': "Search by reference:",
+    'tips.ref.desc': "Choose “Reference / ID” and type e.g.",
+    'tips.text': "Text search:",
+    'tips.text.desc': "Search for words or phrases in the summaries. Example:",
+    'tips.place': "Place search:",
+    'tips.place.desc': "Choose “Place” to search by place name. Example:",
+    'tips.date': "Date filter:",
+    'tips.date.desc': "Use “Filters” to limit the search to a period, e.g. 1200–1350",
+    'tips.source': "Source filter:",
+    'tips.source.desc': "Use “Filters” to limit the search to particular diplomataria",
+    'filters.title': "Filters",
+    'filters.sources': "Sources:",
+    'sort.title': "Sorting",
+    'fuzzy.title': "Fuzzy",
+    'fuzzy.on': "Fuzzy search",
+    'fuzzy.level': "Fuzzy level:",
+    'fuzzy.level.1': "Moderate",
+    'fuzzy.level.2': "Wide",
+    'fuzzy.level.3': "Very wide",
+    'fuzzy.hint': "Fuzzy search also finds words spelled slightly differently, e.g. Kaytala for Caytala. A higher level allows more deviation but gives more irrelevant hits. Does not apply to reference search.",
+    'results.ready': "letters ready to search.",
+    'results.loadError': "Could not load the data. Please reload the page.",
+    'results.failed': "The search failed. Please try again.",
+    'results.stillLoading': "Still loading, try again in a moment...",
+    'results.count': "{n} hits ({ms} ms)",
+    'results.showingRange': "Showing {from}-{to} of {total} hits",
+    'results.hitsN': "{n} hits",
+    'letter.unknown': "Unknown",
+    'letter.body': "Letter text:",
+    'letter.translation': "Translation:",
+    'letter.sources': "Sources:",
+    'letter.footnotes': "Footnotes:",
+    'letter.footnotesTitle': "Footnotes",
+    'letter.mentions': "Mentioned:",
+    'letter.language': "Language:",
+    'letter.related': "Related:",
+    'letter.showOnMap': "Show on map",
+    'letter.uncertainLoc': "(uncertain location)",
+    'letter.notPlaced': "not located yet",
+    'letter.loading': "Loading...",
+    'letter.loadFailed': "Could not load.",
+    'letter.detailsHint': "(Show details for the content)",
+    'letter.unknown.date': "Unknown date",
+    'export.confirm': "This will download data for {n} hits and may take a while. Continue?",
+    'export.preparing': "Preparing export of {n} hits...",
+    'export.progress': "Preparing export... {done}/{total}",
+    'export.done': "{n} hits exported.",
+    'export.title': "Export selection:",
+    'export.downloadTxt': "Download TXT",
+    'export.downloadCsv': "Download CSV",
+    'map.title': "Geographic exploration",
+    'map.draw': "Draw area",
+    'map.clear': "Clear selection",
+    'map.withPlace': "{n} letters with place information",
+    'map.inArea': "{n} letters in the selected area",
+    'map.noneInArea': "No letters in the selected area",
+    'map.showLetter': "Show the letter",
+    'map.mentioned': "mentioned in the letter",
+    'map.loadError': "Could not load the map data.",
+    'letter.moreRelated': '{n} more related entries',
+    'letter.clickToShow': 'click to show',
+    'letter.crossRefs': 'Cross-references:',
     'lang.switch': 'Norsk',
   }
 };
@@ -173,8 +279,10 @@ let currentLang = localStorage.getItem('sd-lang') || 'no';
 /**
  * Get translation for a key
  */
-function t(key) {
-  return TRANSLATIONS[currentLang]?.[key] || TRANSLATIONS['no'][key] || key;
+function t(key, params) {
+  let text = TRANSLATIONS[currentLang]?.[key] || TRANSLATIONS['no'][key] || key;
+  if (params) for (const [k, v] of Object.entries(params)) text = text.split('{' + k + '}').join(String(v));
+  return text;
 }
 
 /**
@@ -216,6 +324,8 @@ function setLanguage(lang) {
   if (langBtn) {
     langBtn.textContent = t('lang.switch');
   }
+
+  window.dispatchEvent(new CustomEvent('sd:language', { detail: lang }));
 }
 
 /**

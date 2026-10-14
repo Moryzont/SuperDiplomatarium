@@ -79,6 +79,7 @@
     font-size: clamp(28px, 2.8vw, 36px);
   }
   .brand-initial{ font-weight: 700; letter-spacing: .08px; margin-right: .02em; color: var(--c-dark); }
+  .brand:hover .brand-initial, .brand:focus-visible .brand-initial{ color: var(--c-olive); }
   
   .nav-toggle{ display:none; } /* shown under 640px, see the media block below */
   
@@ -410,11 +411,22 @@
   }
 
   /* Search options row */
+  /* The four panel names stay on one row; an opened panel's content is laid
+     out below the row (the <details> elements contribute their children to
+     the grid: summaries in row 1, contents in row 2). */
   .search-options-row {
-    display: flex;
-    gap: 1.5rem;
+    display: grid;
+    grid-template-columns: repeat(4, max-content);
+    column-gap: 1.5rem;
     margin-top: 1rem;
-    flex-wrap: wrap;
+  }
+  .search-options-row > details { display: contents; }
+  .search-options-row > details > summary { grid-row: 1; }
+  .search-options-row > details > :not(summary) { grid-row: 2; grid-column: 1 / -1; }
+  @media (max-width: 640px) {
+    .search-options-row { grid-template-columns: repeat(2, max-content); row-gap: .25rem; }
+    .search-options-row > details > summary { grid-row: auto; }
+    .search-options-row > details > :not(summary) { grid-row: auto; }
   }
 
   .search-options-row > details {

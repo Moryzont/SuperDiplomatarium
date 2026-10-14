@@ -6,6 +6,9 @@
  */
 
 // Source database configuration - muted colors harmonizing with theme palette
+// Translated text (assets/js/i18n.js); the key itself when i18n is absent.
+const LT = (key, params) => (window.i18n ? window.i18n.t(key, params) : key);
+
 const SOURCES = {
   DN: {
     name: 'Diplomatarium Norvegicum',
@@ -76,7 +79,7 @@ function renderSourceBadges(letter) {
   const sources = getLetterSources(letter);
 
   if (sources.length === 0) {
-    return '<span class="source-badge unknown">Ukjent</span>';
+    return `<span class="source-badge unknown">${LT('letter.unknown')}</span>`;
   }
 
   return sources.map(s => {
@@ -112,6 +115,17 @@ function formatReference(ref, sourceKey) {
       const vol = parseInt(m[1], 10);
       const num = parseInt(m[2], 10);
       return `RN ${toRoman(vol)}, ${num}`;
+    }
+  }
+
+  // DD: printed volumes DD_<bind>_R<række>_<nr>, online date ids DD<yyyy><mm><dd><nnn>
+  if (sourceKey === 'DD') {
+    let d = refStr.match(/^DD_(\d{2})_R(\d)_(\d{5})$/i);
+    if (d) return `DD ${d[2]}. rk. ${toRoman(parseInt(d[1], 10))} nr. ${parseInt(d[3], 10)}`;
+    d = refStr.match(/^DD(\d{4})(\d{2})(\d{2})(\d{3})$/i);
+    if (d) {
+      const date = d[2] === '99' ? d[1] : d[3] === '99' ? `${d[1]}-${d[2]}` : `${d[1]}-${d[2]}-${d[3]}`;
+      return `DD ${date} nr. ${parseInt(d[4], 10)}`;
     }
   }
 
@@ -193,7 +207,7 @@ function formatDateRange(start, end, original) {
   if (ys) return String(ys);
   if (ye) return String(ye);
 
-  return 'Ukjent dato';
+  return LT('letter.unknown.date');
 }
 
 function parseYear(s) {
@@ -308,7 +322,7 @@ function renderSearchResultCard(letter, options = {}) {
   const idx = letter.i ?? letter.__id ?? 0;
   const sdId = getLetterID(letter);
   const date = formatDateRange(letter.ds || letter.date_start, letter.de || letter.date_end, letter.od || letter.original_date);
-  const place = getPlaceName(letter) || 'Ukjent sted';
+  const place = getPlaceName(letter) || LT('letter.unknown.place');
 
   // Get summary text and process footnotes if available
   const summaryText = getSummaryText(letter);
@@ -343,7 +357,7 @@ function renderSearchResultCard(letter, options = {}) {
       ${showFulltextButton ? `
         <div class="letter-footer" data-idx="${idx}" style="display:none;"></div>
         <div class="letter-actions">
-          <button class="toggle-details btn-link" aria-expanded="false" data-idx="${idx}">Vis detaljer</button>
+          <button class="toggle-details btn-link" aria-expanded="false" data-idx="${idx}">${LT('letter.show')}</button>
         </div>
       ` : ''}
     </div>
@@ -355,7 +369,7 @@ function renderSearchResultCard(letter, options = {}) {
  */
 function renderMapPopup(letter) {
   const date = formatDateRange(letter.ds || letter.date_start, letter.de || letter.date_end, letter.od || letter.original_date);
-  const place = getPlaceName(letter) || 'Ukjent sted';
+  const place = getPlaceName(letter) || LT('letter.unknown.place');
   const summary = getSummaryText(letter, 150);
 
   return `
@@ -434,7 +448,7 @@ function renderFootnotesSection(footnoteMap) {
     items.push(`<div class="footnote-item" id="fn-${num}"><span class="footnote-num">${num}.</span> ${escapeHtml(text)}</div>`);
   }
 
-  return `<div class="footnotes-section"><div class="footnotes-header">Fotnoter</div>${items.join('')}</div>`;
+  return `<div class="footnotes-section"><div class="footnotes-header">${LT('letter.footnotesTitle')}</div>${items.join('')}</div>`;
 }
 
 /**
@@ -507,7 +521,7 @@ function renderLetterDetails(full) {
   if (full.lat && full.lon && sdIdForMap) {
     const BASE = (window.SITE_BASE || '').replace(/\/+$/, '');
     mapHref = `${BASE}/kart/?sd=${encodeURIComponent(sdIdForMap)}`;
-    mapTitle = `Vis på kart · ${full.lat}, ${full.lon}${full.uncertain_loc ? ' (usikker plassering)' : ''}`;
+    mapTitle = `${LT('letter.showOnMap')} · ${full.lat}, ${full.lon}${full.uncertain_loc ? ' ' + LT('letter.uncertainLoc') : ''}`;
   }
 
   const uniqueDateVals = new Set(sourceDates.map(d => d.val.trim()));
@@ -561,12 +575,12 @@ function renderLetterDetails(full) {
   // Add brevtekst if not used as main and exists
   const showBrevtekstSeparate = usedFallback !== 'brevtekst' && brevtekst && brevtekst !== fullSammendrag;
   if (showBrevtekstSeparate) {
-    continuation += `<div class="detail-section"><em>Brevtekst:</em> ${formatTextWithFootnotes(brevtekst)}</div>`;
+    continuation += `<div class="detail-section"><em>${LT('letter.body')}</em> ${formatTextWithFootnotes(brevtekst)}</div>`;
   }
 
   // Modern translation (DD: tran_text), separate from the original text
   if (full.oversettelse?.trim()) {
-    continuation += `<div class="detail-section"><em>Oversettelse:</em> ${formatTextWithFootnotes(full.oversettelse)}</div>`;
+    continuation += `<div class="detail-section"><em>${LT('letter.translation')}</em> ${formatTextWithFootnotes(full.oversettelse)}</div>`;
   }
 
   // Critical apparatus (DD: variant readings per witness)
@@ -586,9 +600,9 @@ function renderLetterDetails(full) {
       const label = escapeHtml(m.name || m.text);
       return (m.lat != null && m.lon != null)
         ? `<span class="nevnt-chip" title="${m.lat}, ${m.lon}">${icon} ${label}</span>`
-        : `<span class="nevnt-chip nevnt-uplassert" title="ikke stedfestet ennå">${icon} ${label}</span>`;
+        : `<span class="nevnt-chip nevnt-uplassert" title="${LT('letter.notPlaced')}">${icon} ${label}</span>`;
     }).join(' ');
-    continuation += `<div class="detail-section"><em>Nevnte:</em> ${chips}</div>`;
+    continuation += `<div class="detail-section"><em>${LT('letter.mentions')}</em> ${chips}</div>`;
   }
 
   // Add tillegg if present
@@ -598,7 +612,7 @@ function renderLetterDetails(full) {
 
   // Language (curator tag, or the source's own statement)
   if (full.language?.trim()) {
-    continuation += `<div class="detail-section"><em>Språk:</em> ${escapeHtml(full.language)}</div>`;
+    continuation += `<div class="detail-section"><em>${LT('letter.language')}</em> ${escapeHtml(full.language)}</div>`;
   }
 
   // === FOOTER (Source data + Kilder + More section) ===
@@ -614,7 +628,7 @@ function renderLetterDetails(full) {
   if (dfSource && usedFallback !== 'DF_source') sources.push(`<div class="source-item"><span class="source-label">DF:</span> ${escapeHtml(dfSource)}</div>`);
 
   if (sources.length > 0) {
-    footer += `<div class="detail-section"><em>Kilder:</em><div class="source-list">${sources.join('')}</div></div>`;
+    footer += `<div class="detail-section"><em>${LT('letter.sources')}</em><div class="source-list">${sources.join('')}</div></div>`;
   }
 
   // Footnotes
@@ -623,7 +637,7 @@ function renderLetterDetails(full) {
     for (const [num, text] of footnoteMap) {
       fnItems.push(`<div class="footnote-item"><span class="footnote-num">${num}.</span> ${escapeHtml(text)}</div>`);
     }
-    footer += `<div class="detail-section"><em>Fotnoter:</em><div class="footnotes-list">${fnItems.join('')}</div></div>`;
+    footer += `<div class="detail-section"><em>${LT('letter.footnotes')}</em><div class="footnotes-list">${fnItems.join('')}</div></div>`;
   }
 
   // External links
@@ -644,7 +658,7 @@ function renderLetterDetails(full) {
   if (sdId) moreItems.push(`<strong>SD_ID:</strong> ${escapeHtml(sdId)}`);
   if (srcId) moreItems.push(`<strong>SRC_ID:</strong> ${escapeHtml(srcId)}`);
   if (relatedIds && relatedIds.length > 0) {
-    moreItems.push(`<strong>Relaterte:</strong> ${escapeHtml(relatedIds.join(', '))}`);
+    moreItems.push(`<strong>${LT('letter.related')}</strong> ${escapeHtml(relatedIds.join(', '))}`);
   }
 
   if (moreItems.length > 0) {
@@ -660,7 +674,7 @@ function renderLetterDetails(full) {
       .filter(r => !/^(?:RA|NRA|DRA|Est)_\d+$|^DN_00_/.test(r));
 
     if (crossRefs.length > 0) {
-      footer += `<div class="detail-section"><em>Kryssreferanser:</em> ${escapeHtml(crossRefs.join(' | '))}</div>`;
+      footer += `<div class="detail-section"><em>${LT('letter.crossRefs')}</em> ${escapeHtml(crossRefs.join(' | '))}</div>`;
     }
   }
 

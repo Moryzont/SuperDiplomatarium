@@ -26,6 +26,9 @@ const CONFIG = {
 
 const V3 = () => `${BASE()}/data/v3`;
 
+// Translated text (assets/js/i18n.js); the key itself when i18n is absent.
+const TR = (key, params) => (window.i18n ? window.i18n.t(key, params) : key);
+
 // ===================== State =====================
 const STATE = {
   core: null,               // { fields, records: [[id,d,r,sdhk,dd,df,src,ds,de,rel],...] }
@@ -61,6 +64,13 @@ function BASE() {
   return (window.SITE_BASE || '').replace(/\/+$/, '');
 }
 
+// Status text is kept as a thunk so it can be re-rendered in the other language.
+function status(thunk, isError = false) {
+  STATE.statusThunk = thunk;
+  STATE.statusError = isError;
+  updateStatus(thunk(), isError);
+}
+
 function updateStatus(msg, isError = false) {
   const el = document.getElementById('search-status');
   if (el) {
@@ -74,7 +84,7 @@ function updateStatus(msg, isError = false) {
 // the page is usable as soon as the script runs; text searches go straight
 // to Pagefind. ensureCore() awaits it where it is really needed.
 async function initializeSearch() {
-  updateStatus('Laster inn...');
+  status(() => TR('results.loading'));
   STATE.currentResults = arrayResults([]);
   STATE.corePromise = (async () => {
     const res = await fetch(`${V3()}/core.json`);
@@ -87,7 +97,7 @@ async function initializeSearch() {
   })();
   STATE.corePromise.catch(err => {
     console.error('Init error:', err);
-    updateStatus('Kunne ikke laste data. Prøv å laste siden på nytt.', true);
+    status(() => TR('results.loadError'), true);
   });
   STATE.isLoading = false;
   warmIndexes(getSearchField());
@@ -95,13 +105,13 @@ async function initializeSearch() {
     const res = await fetch(`${BASE()}/data/metadata.json`);
     const meta = res.ok ? await res.json() : null;
     if (meta?.total_letters) {
-      updateStatus(`${meta.total_letters} brev klare for søk.`);
+      status(() => `${meta.total_letters} ${TR('results.ready')}`);
       return;
     }
   } catch (err) { /* fall through: the count comes with the core table */ }
   try {
     const core = await STATE.corePromise;
-    updateStatus(`${core.records.length} brev klare for søk.`);
+    status(() => `${core.records.length} ${TR('results.ready')}`);
   } catch (err) { /* already reported */ }
 }
 
@@ -480,7 +490,7 @@ function fuzzyLevel() {
   return parseInt(document.getElementById('fuzzy-distance')?.value || '1', 10) || 1;
 }
 
-const FUZZY_LEVEL_NAMES = { 1: 'Moderat', 2: 'Vid', 3: 'Svært vid' };
+const fuzzyLevelName = level => TR('fuzzy.level.' + level);
 
 function fuzzyMaxDistance(len, level) {
   if (level >= 3) return len >= 9 ? 3 : len >= 5 ? 2 : len >= 3 ? 1 : 0;
@@ -681,16 +691,16 @@ async function performSearch() {
     await updateResultsView([]);
     renderPagination(0);
     setExportEnabled(false);
-    updateStatus('Skriv inn søkeord eller velg datofilter.');
+    status(() => TR('results.enter'));
     return;
   }
 
   if (STATE.isLoading) {
-    updateStatus('Laster fortsatt data, prøv igjen straks...');
+    status(() => TR('results.stillLoading'));
     return;
   }
 
-  updateStatus('Søker...');
+  status(() => TR('results.searching'));
   const startTime = performance.now();
 
   try {
@@ -727,11 +737,11 @@ async function performSearch() {
     await renderPage();
     if (seq !== STATE.activeSearchSeq) return;
     const elapsed = (performance.now() - startTime).toFixed(0);
-    updateStatus(`${results.length} treff (${elapsed} ms)`);
+    status(() => TR('results.count', { n: STATE.currentResults.length, ms: elapsed }));
     setExportEnabled(results.length > 0);
   } catch (err) {
     console.error('Search error:', err);
-    if (seq === STATE.activeSearchSeq) updateStatus('Søket feilet. Prøv på nytt.', true);
+    if (seq === STATE.activeSearchSeq) status(() => TR('results.failed'), true);
   }
 }
 
@@ -812,7 +822,7 @@ function formatDateRange(start, end, original) {
   const ys = String(start || '').match(/^(\d{4})/)?.[1];
   const ye = String(end || '').match(/^(\d{4})/)?.[1] || ys;
   if (ys && ye) return ys === ye ? ys : `${ys}-${ye}`;
-  return ys || ye || 'Ukjent';
+  return ys || ye || TR('letter.unknown');
 }
 
 function toRoman(num) {
@@ -822,6 +832,20 @@ function toRoman(num) {
   let n = num;
   for (const [v, s] of map) { while (n >= v) { out += s; n -= v; } }
   return out;
+}
+
+// DD ids come in two forms: the printed volumes' DD_<bind>_R<række>_<nr>
+// (e.g. DD_03_R1_00177 = 1. række, bind III, nr. 177) and the online
+// edition's date ids DD<yyyy><mm><dd><nnn> (99 = unknown month/day).
+function formatDdRef(refStr) {
+  let m = refStr.match(/^DD_(\d{2})_R(\d)_(\d{5})$/i);
+  if (m) return `DD ${m[2]}. rk. ${toRoman(parseInt(m[1], 10))} nr. ${parseInt(m[3], 10)}`;
+  m = refStr.match(/^DD(\d{4})(\d{2})(\d{2})(\d{3})$/i);
+  if (m) {
+    const date = m[2] === '99' ? m[1] : m[3] === '99' ? `${m[1]}-${m[2]}` : `${m[1]}-${m[2]}-${m[3]}`;
+    return `DD ${date} nr. ${parseInt(m[4], 10)}`;
+  }
+  return refStr;
 }
 
 function formatRef(ref, sourceKey) {
@@ -839,10 +863,7 @@ function formatRef(ref, sourceKey) {
     const m = refStr.match(/^SDHK[_-]?(\d+)$/i);
     if (m) return `SDHK ${parseInt(m[1], 10)}`;
   }
-  if (sourceKey === 'DD') {
-    const m = refStr.match(/^DD[_-]?(\d+)$/i);
-    if (m) return `DD ${parseInt(m[1], 10)}`;
-  }
+  if (sourceKey === 'DD') return formatDdRef(refStr);
   if (sourceKey === 'DF') {
     const m = refStr.match(/^DF[_-]?(\d+)$/i);
     if (m) return `DF ${parseInt(m[1], 10)}`;
@@ -869,12 +890,12 @@ function renderSourceBadges(letter) {
   const relatedIds = letter.rel || [];
 
   if (relatedIds.length > 0) {
-    const allSources = [{ idx: letter.i, source: letter.src || 'Ukjent', sdId: letter.id, isActive: true }];
+    const allSources = [{ idx: letter.i, source: letter.src || TR('letter.unknown'), sdId: letter.id, isActive: true }];
     for (const sdId of relatedIds) {
       const relIdx = STATE.sdIdToIndex.get(sdId);
       if (relIdx !== undefined) {
         const rel = coreLetter(relIdx);
-        allSources.push({ idx: relIdx, source: rel.src || 'Ukjent', sdId, isActive: false });
+        allSources.push({ idx: relIdx, source: rel.src || TR('letter.unknown'), sdId, isActive: false });
       }
     }
     // Defensive cap: a card should never render an unbounded toggle row
@@ -882,7 +903,7 @@ function renderSourceBadges(letter) {
     const overflow = allSources.length - MAX_TOGGLES;
     const shown = overflow > 0 ? allSources.slice(0, MAX_TOGGLES) : allSources;
     const overflowHtml = overflow > 0
-      ? `<span class="source-overflow" title="${overflow} flere relaterte oppføringer">+${overflow}</span>`
+      ? `<span class="source-overflow" title="${TR('letter.moreRelated', { n: overflow })}">+${overflow}</span>`
       : '';
     return shown.map(s => {
       const color = SOURCE_COLORS[s.source] || '#6b7280';
@@ -893,7 +914,7 @@ function renderSourceBadges(letter) {
       }
       return `<button class="source-toggle" data-source-idx="${s.idx}" data-card-idx="${letter.i}"
                       style="background-color: transparent; color: ${color}; border: 2px solid ${color};"
-                      title="${s.sdId} - klikk for å vise">${s.source}</button>`;
+                      title="${s.sdId} - ${TR('letter.clickToShow')}">${s.source}</button>`;
     }).join('') + overflowHtml;
   }
 
@@ -906,7 +927,7 @@ function renderSourceBadges(letter) {
   if (!sources.length && letter.src) {
     for (const part of letter.src.split('+')) if (!sources.includes(part)) sources.push(part);
   }
-  if (!sources.length) return '<span class="source-badge unknown">Ukjent</span>';
+  if (!sources.length) return `<span class="source-badge unknown">${TR('letter.unknown')}</span>`;
   return sources.map(key => {
     const color = SOURCE_COLORS[key] || '#6b7280';
     return `<span class="source-badge" style="background-color: ${color}" title="${key}">${key}</span>`;
@@ -915,7 +936,7 @@ function renderSourceBadges(letter) {
 
 function renderCard(letter, query) {
   const date = formatDateRange(letter.ds, letter.de, letter.od);
-  const place = letter.p || 'Ukjent sted';
+  const place = letter.p || TR('letter.unknown.place');
   const preview = letter.s ? highlightQuery(letter.s, query) : '';
   return `
     <div class="search-result letter-card" data-idx="${letter.i}">
@@ -930,12 +951,12 @@ function renderCard(letter, query) {
         <span class="letter-meta-expanded" style="display:none;"></span>
       </div>
       <div class="letter-content" data-idx="${letter.i}">
-        ${preview ? `<span class="letter-summary">${preview}</span>` : '<span class="letter-summary"><em class="text-muted">(Vis detaljer for innhold)</em></span>'}
+        ${preview ? `<span class="letter-summary">${preview}</span>` : `<span class="letter-summary"><em class="text-muted">${TR('letter.detailsHint')}</em></span>`}
         <span class="letter-continuation" style="display:none;"></span>
       </div>
       <div class="letter-footer" data-idx="${letter.i}" style="display:none;"></div>
       <div class="letter-actions">
-        <button class="toggle-details btn-link" aria-expanded="false" data-idx="${letter.i}">Vis detaljer</button>
+        <button class="toggle-details btn-link" aria-expanded="false" data-idx="${letter.i}">${TR('letter.show')}</button>
       </div>
     </div>`;
 }
@@ -944,12 +965,12 @@ async function updateResultsView(letters, from = 0, to = 0, total = 0) {
   const container = document.getElementById('search-results');
   if (!container) return;
   if (!letters?.length) {
-    container.innerHTML = total === 0 && from === 0 ? '' : '<p>Ingen treff</p>';
+    container.innerHTML = total === 0 && from === 0 ? '' : `<p>${TR('results.none')}</p>`;
     return;
   }
   const query = STATE.currentQuery;
   container.innerHTML = `
-    <p class="result-count">Viser ${from}-${to} av ${total} treff</p>
+    <p class="result-count">${TR('results.showingRange', { from, to, total })}</p>
     <div class="result-list">${letters.map(l => renderCard(l, query)).join('')}</div>`;
 }
 
@@ -988,7 +1009,7 @@ async function loadAndShowDetails(idx, showingSourceIdx = null) {
   const footerEl = card.querySelector('.letter-footer');
 
   if (contEl) {
-    contEl.innerHTML = ' <em style="color:#606C38;">Laster...</em>';
+    contEl.innerHTML = ` <em style="color:#606C38;">${TR('letter.loading')}</em>`;
     contEl.style.display = 'inline';
   }
 
@@ -998,7 +1019,7 @@ async function loadAndShowDetails(idx, showingSourceIdx = null) {
   await loadFullDataForIndices([displayIdx]);
   const full = getFullData(displayIdx);
   if (!full) {
-    if (contEl) contEl.innerHTML = ' <em style="color:#BC6C25;">Kunne ikke laste.</em>';
+    if (contEl) contEl.innerHTML = ` <em style="color:#BC6C25;">${TR('letter.loadFailed')}</em>`;
     return;
   }
 
@@ -1016,14 +1037,14 @@ async function loadAndShowDetails(idx, showingSourceIdx = null) {
         dateEl.textContent = LD.formatDateRange(full.date_start, full.date_end, full.original_date || full.DN_dato || full.RN_dato);
       }
       const placeEl = card.querySelector('.letter-place');
-      if (placeEl && LD.getPlaceName) placeEl.textContent = LD.getPlaceName(full) || 'Ukjent sted';
+      if (placeEl && LD.getPlaceName) placeEl.textContent = LD.getPlaceName(full) || TR('letter.unknown.place');
     }
 
     // Georeferenced letters: the place name links to the map pin (applies
     // on every expansion, not just when switching to a related letter)
     const placeLinkEl = card.querySelector('.letter-place');
     if (placeLinkEl && details.mapHref && !placeLinkEl.querySelector('.place-link')) {
-      const placeName = (LD.getPlaceName ? LD.getPlaceName(full) : '') || placeLinkEl.textContent || 'Ukjent sted';
+      const placeName = (LD.getPlaceName ? LD.getPlaceName(full) : '') || placeLinkEl.textContent || TR('letter.unknown.place');
       placeLinkEl.innerHTML = `<a class="place-link" href="${details.mapHref}" title="${escapeHtml(details.mapTitle)}">${escapeHtml(placeName)}</a>`;
     }
 
@@ -1073,12 +1094,12 @@ async function updateCardWithSource(originalIdx, newSourceIdx) {
   // Rebuild toggle buttons with the new active state
   const badgesContainer = card.querySelector('.source-badges');
   if (badgesContainer) {
-    const allSources = [{ idx: originalIdx, source: original.src || 'Ukjent', sdId: original.id, isActive: newSourceIdx === originalIdx }];
+    const allSources = [{ idx: originalIdx, source: original.src || TR('letter.unknown'), sdId: original.id, isActive: newSourceIdx === originalIdx }];
     for (const sdId of (original.rel || [])) {
       const relIdx = STATE.sdIdToIndex.get(sdId);
       if (relIdx !== undefined) {
         const rel = coreLetter(relIdx);
-        allSources.push({ idx: relIdx, source: rel.src || 'Ukjent', sdId, isActive: newSourceIdx === relIdx });
+        allSources.push({ idx: relIdx, source: rel.src || TR('letter.unknown'), sdId, isActive: newSourceIdx === relIdx });
       }
     }
     badgesContainer.innerHTML = allSources.map(s => {
@@ -1090,7 +1111,7 @@ async function updateCardWithSource(originalIdx, newSourceIdx) {
       }
       return `<button class="source-toggle" data-source-idx="${s.idx}" data-card-idx="${originalIdx}"
                       style="background-color: transparent; color: ${color}; border: 2px solid ${color};"
-                      title="${s.sdId} - klikk for å vise">${s.source}</button>`;
+                      title="${s.sdId} - ${TR('letter.clickToShow')}">${s.source}</button>`;
     }).join('');
   }
 
@@ -1107,12 +1128,12 @@ async function updateCardWithSource(originalIdx, newSourceIdx) {
   const placeEl = card.querySelector('.letter-place');
   if (placeEl) {
     placeEl.textContent = (full.Normalized_name && full.Normalized_name !== '[No_loc]' ? full.Normalized_name
-      : (full.DN_sted || full.RN_sted || full.DD_sted || full.SDHK_sted || full.DF_sted)) || 'Ukjent sted';
+      : (full.DN_sted || full.RN_sted || full.DD_sted || full.SDHK_sted || full.DF_sted)) || TR('letter.unknown.place');
   }
   const summaryEl = card.querySelector('.letter-summary');
   if (summaryEl) {
     const s = (full.sammendrag || full.regest || '').slice(0, 300);
-    summaryEl.innerHTML = s ? escapeHtml(s) : '<em class="text-muted">(Vis detaljer for innhold)</em>';
+    summaryEl.innerHTML = s ? escapeHtml(s) : `<em class="text-muted">${TR('letter.detailsHint')}</em>`;
   }
 
   // If details are expanded, refresh them for the new source
@@ -1122,7 +1143,7 @@ async function updateCardWithSource(originalIdx, newSourceIdx) {
     await loadAndShowDetails(originalIdx, newSourceIdx);
     const toggle = card.querySelector('.toggle-details');
     if (toggle) {
-      toggle.textContent = 'Skjul detaljer';
+      toggle.textContent = TR('letter.hide');
       toggle.setAttribute('aria-expanded', 'true');
     }
     const contEl = card.querySelector('.letter-continuation');
@@ -1163,14 +1184,8 @@ function wireListeners() {
   if (fieldSelect) {
     fieldSelect.addEventListener('change', () => {
       if (input) {
-        const placeholders = {
-          id: 'DN XII 251, SD20011494, SDHK 1234...',
-          text: 'Søk i sammendrag...',
-          fulltext: 'Søk i brevtekst...',
-          place: 'Søk etter sted...',
-          all: 'Søk i alle felt...'
-        };
-        input.placeholder = placeholders[fieldSelect.value] || 'Søk...';
+        input.placeholder = TR('search.placeholder.' + fieldSelect.value);
+        input.dataset.i18nPlaceholder = 'search.placeholder.' + fieldSelect.value;
       }
       warmIndexes(fieldSelect.value);
       performSearch();
@@ -1184,11 +1199,16 @@ function wireListeners() {
   const fuzzyLabel = document.getElementById('fuzzy-label');
   const syncFuzzyControls = () => {
     document.getElementById('fuzzy-controls')?.classList.toggle('is-off', !!fuzzyOn && !fuzzyOn.checked);
-    if (fuzzyLabel && fuzzySlider) fuzzyLabel.textContent = FUZZY_LEVEL_NAMES[fuzzySlider.value] || '';
+    if (fuzzyLabel && fuzzySlider) fuzzyLabel.textContent = fuzzyLevelName(fuzzySlider.value);
   };
   syncFuzzyControls();
   fuzzyOn?.addEventListener('change', () => { syncFuzzyControls(); performSearch(); });
   fuzzySlider?.addEventListener('input', () => { syncFuzzyControls(); debounced(); });
+  window.addEventListener('sd:language', () => {
+    syncFuzzyControls();
+    if (STATE.statusThunk) updateStatus(STATE.statusThunk(), STATE.statusError);
+    if (STATE.currentResults?.length) renderPage();
+  });
 
   const df = document.getElementById('date-from');
   const dt = document.getElementById('date-to');
@@ -1226,12 +1246,12 @@ function wireResultsList() {
 
       if (!isExpanded) {
         await loadAndShowDetails(idx);
-        toggle.textContent = 'Skjul detaljer';
+        toggle.textContent = TR('letter.hide');
       } else {
         if (contEl) contEl.style.display = 'none';
         if (footerEl) footerEl.style.display = 'none';
         if (metaExpEl) metaExpEl.style.display = 'none';
-        toggle.textContent = 'Vis detaljer';
+        toggle.textContent = TR('letter.show');
       }
       toggle.setAttribute('aria-expanded', String(!isExpanded));
       ev.preventDefault();
@@ -1335,19 +1355,19 @@ function setExportEnabled(on) {
   if (csvBtn) csvBtn.disabled = !on;
   if (txtBtn) txtBtn.disabled = !on;
   const count = document.querySelector('.export-count');
-  if (count) count.textContent = on ? `${STATE.currentResults.length} treff` : '';
+  if (count) count.textContent = on ? TR('results.hitsN', { n: STATE.currentResults.length }) : '';
 }
 
 async function downloadExport(format) {
   const n = STATE.currentResults.length;
   if (n > CONFIG.EXPORT_WARN_AT &&
-      !window.confirm(`Dette vil laste ned data for ${n} treff og kan ta litt tid. Fortsette?`)) {
+      !window.confirm(TR('export.confirm', { n }))) {
     return;
   }
 
-  updateStatus(`Forbereder eksport av ${n} treff...`);
+  status(() => TR('export.preparing', { n }));
   const letters = (await resolveAll(await STATE.currentResults.all(), (done, total) =>
-    updateStatus(`Forbereder eksport... ${done}/${total}`))).filter(Boolean);
+    updateStatus(TR('export.progress', { done, total })))).filter(Boolean);
   await loadFullDataForIndices(letters.map(l => l.i));
 
   if (format === 'csv') {
@@ -1365,7 +1385,7 @@ async function downloadExport(format) {
       const full = getFullData(l.i) || {};
       parts.push([
         `${l.d || l.r || l.sdhk || l.dd || l.df || l.id || 'Uten referanse'}`,
-        `Dato: ${formatDateRange(l.ds, l.de, l.od)} | Sted: ${l.p || 'Ukjent'}`,
+        `Dato: ${formatDateRange(l.ds, l.de, l.od)} | Sted: ${l.p || TR('letter.unknown')}`,
         '',
         full.sammendrag ? `SAMMENDRAG:\n${full.sammendrag}` : '',
         full.brevtekst ? `\nBREVTEKST:\n${full.brevtekst}` : ''
@@ -1373,7 +1393,7 @@ async function downloadExport(format) {
     }
     downloadBlob(new Blob([parts.join('\n\n---\n\n')], { type: 'text/plain;charset=utf-8' }), 'sok-treff.txt');
   }
-  updateStatus(`${n} treff eksportert.`);
+  status(() => TR('export.done', { n }));
 }
 
 function downloadBlob(blob, filename) {

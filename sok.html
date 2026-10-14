@@ -27,27 +27,27 @@ permalink: /sok/
 
     <div class="search-options-row">
       <details class="search-help">
-        <summary>Søketips</summary>
+        <summary data-i18n="tips.title">Søketips</summary>
         <div class="search-tips-content">
-          <p><strong>Søk etter referanse:</strong> Velg "Referanse / ID" og skriv f.eks. <code>DN XII 251</code>, <code>RN I 223</code>, <code>SDHK 1234</code> eller <code>DD 123</code></p>
-          <p><strong>Tekstsøk:</strong> Søk etter ord eller fraser i sammendrag. Eksempel: <code>kong Håkon</code>, <code>biskop</code>, <code>jordegods</code></p>
-          <p><strong>Stedsøk:</strong> Velg "Sted" for å søke etter stedsnavn. Eksempel: <code>Bergen</code>, <code>Nidaros</code>, <code>Oslo</code></p>
-          <p><strong>Datofilter:</strong> Bruk "Filtre" for å begrense til en tidsperiode, f.eks. 1200–1350</p>
-          <p><strong>Kildefilter:</strong> Bruk "Filtre" for å begrense søket til bestemte diplomataria</p>
+          <p><strong data-i18n="tips.ref">Søk etter referanse:</strong> <span data-i18n="tips.ref.desc">Velg «Referanse / ID» og skriv f.eks.</span> <code>DN XII 251</code>, <code>RN I 223</code>, <code>SDHK 1234</code> eller <code>DD 123</code></p>
+          <p><strong data-i18n="tips.text">Tekstsøk:</strong> <span data-i18n="tips.text.desc">Søk etter ord eller fraser i sammendrag. Eksempel:</span> <code>kong Håkon</code>, <code>biskop</code>, <code>jordegods</code></p>
+          <p><strong data-i18n="tips.place">Stedsøk:</strong> <span data-i18n="tips.place.desc">Velg «Sted» for å søke etter stedsnavn. Eksempel:</span> <code>Bergen</code>, <code>Nidaros</code>, <code>Oslo</code></p>
+          <p><strong data-i18n="tips.date">Datofilter:</strong> <span data-i18n="tips.date.desc">Bruk «Filtre» for å begrense til en tidsperiode, f.eks. 1200–1350</span></p>
+          <p><strong data-i18n="tips.source">Kildefilter:</strong> <span data-i18n="tips.source.desc">Bruk «Filtre» for å begrense søket til bestemte diplomataria</span></p>
         </div>
       </details>
       <details class="search-filters">
-        <summary>Filtre</summary>
+        <summary data-i18n="filters.title">Filtre</summary>
         <div class="filters-content">
           <div class="filter-group date-filter">
-            <label>Datoperiode:</label>
-            <input id="date-from" type="text" placeholder="Fra (YYYY)" autocomplete="off">
+            <label data-i18n="filters.date">Datoperiode:</label>
+            <input id="date-from" type="text" placeholder="Fra (YYYY)" data-i18n-placeholder="filters.from" autocomplete="off">
             <span class="date-sep">–</span>
-            <input id="date-to" type="text" placeholder="Til (YYYY)" autocomplete="off">
+            <input id="date-to" type="text" placeholder="Til (YYYY)" data-i18n-placeholder="filters.to" autocomplete="off">
             <button id="date-reset" type="button" class="btn-reset" title="Nullstill">✕</button>
           </div>
           <div class="filter-group source-filter">
-            <label>Kilder:</label>
+            <label data-i18n="filters.sources">Kilder:</label>
             <div class="source-checkboxes">
               <label class="db-checkbox"><input type="checkbox" id="filter-dn" checked> DN</label>
               <label class="db-checkbox"><input type="checkbox" id="filter-rn" checked> RN</label>
@@ -59,24 +59,24 @@ permalink: /sok/
         </div>
       </details>
       <details class="search-mode">
-        <summary>Fuzzy</summary>
+        <summary data-i18n="fuzzy.title">Fuzzy</summary>
         <div class="mode-content">
-          <label class="db-checkbox"><input type="checkbox" id="fuzzy-on" checked> Fuzzy-søk</label>
+          <label class="db-checkbox"><input type="checkbox" id="fuzzy-on" checked> <span data-i18n="fuzzy.on">Fuzzy-søk</span></label>
           <div id="fuzzy-controls" class="fuzzy-controls">
-            <label for="fuzzy-distance">Fuzzy-nivå:</label>
+            <label for="fuzzy-distance" data-i18n="fuzzy.level">Fuzzy-nivå:</label>
             <input type="range" id="fuzzy-distance" min="1" max="3" value="1" step="1" class="fuzzy-slider">
             <span id="fuzzy-label" class="fuzzy-label">Moderat</span>
           </div>
-          <p class="mode-hint">Fuzzy-søk finner også ord som er stavet litt annerledes, f.eks. <code>Kaytala</code> for <code>Caytala</code>. Høyere nivå tillater flere avvik, men gir flere irrelevante treff. Gjelder ikke referansesøk.</p>
+          <p class="mode-hint" data-i18n="fuzzy.hint">Fuzzy-søk finner også ord som er stavet litt annerledes, f.eks. Kaytala for Caytala. Høyere nivå tillater flere avvik, men gir flere irrelevante treff. Gjelder ikke referansesøk.</p>
         </div>
       </details>
       <details class="search-sorting">
-        <summary>Sortering</summary>
+        <summary data-i18n="sort.title">Sortering</summary>
         <div class="sorting-content">
-          <select id="sort-mode" class="sort-select">
-            <option value="date">Dato (eldst først)</option>
-            <option value="date-desc">Dato (nyest først)</option>
-            <option value="completeness">Mest komplett</option>
+          <select id="sort-mode" class="sort-select" data-i18n-options>
+            <option value="date" data-i18n="filters.sort.date">Dato (eldst først)</option>
+            <option value="date-desc" data-i18n="filters.sort.date.desc">Dato (nyest først)</option>
+            <option value="completeness" data-i18n="filters.sort.completeness">Mest komplett</option>
           </select>
         </div>
       </details>

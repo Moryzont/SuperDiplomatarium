@@ -54,6 +54,15 @@ data/optimized/full-XX.json           full records for the detail view, 100 lett
   expanded — Pagefind's cost grows with the result count and the variants of
   a common word add noise. Multi-word queries keep AND semantics.
 
+## English mode
+
+`assets/js/i18n.js` holds every user-facing string in Norwegian and English.
+Static text carries `data-i18n` (or `data-i18n-placeholder`, `data-i18n-options`);
+the scripts render dynamic text through a translation helper (`TR`/`LT`/`MT`
+in search-v3.js, letter-display.js and map.js) and re-render on the
+`sd:language` event. The front page and the about page are Norwegian prose
+and are not translated. When adding a string, add both languages.
+
 ## Build & test locally
 
 See `../PIPELINE.md` for the full backend-to-site chain.

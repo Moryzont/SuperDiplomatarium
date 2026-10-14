@@ -5,11 +5,11 @@ permalink: /kart/
 ---
 
 <div class="map-container">
-  <h1>Geografisk utforskning</h1>
+  <h1 data-i18n="map.title">Geografisk utforskning</h1>
 
   <div class="map-controls">
-    <button id="draw-area">Tegn område</button>
-    <button id="clear-selection">Fjern valg</button>
+    <button id="draw-area" data-i18n="map.draw">Tegn område</button>
+    <button id="clear-selection" data-i18n="map.clear">Fjern valg</button>
     <span id="selection-count"></span>
   </div>
 
@@ -17,10 +17,10 @@ permalink: /kart/
 
   <!-- Export toolbar (appears above result list) -->
   <div id="export-bar" class="export-bar" style="display:none;">
-    <div class="export-left"><strong>Eksportér utvalg:</strong></div>
+    <div class="export-left"><strong data-i18n="export.title">Eksportér utvalg:</strong></div>
     <div class="export-right">
-      <button id="export-txt" disabled>Last ned TXT</button>
-      <button id="export-csv" disabled>Last ned CSV</button>
+      <button id="export-txt" disabled data-i18n="export.downloadTxt">Last ned TXT</button>
+      <button id="export-csv" disabled data-i18n="export.downloadCsv">Last ned CSV</button>
     </div>
   </div>
 

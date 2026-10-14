@@ -5,6 +5,8 @@ let lettersData = [];
 const fullDataCache = new Map();
 const fullChunksLoaded = new Set();
 let fullChunkSize = 500;
+// Translated text (assets/js/i18n.js); the key itself when i18n is absent.
+const MT = (key, params) => (window.i18n ? window.i18n.t(key, params) : key);
 let currentSelection = []; // what gets exported
 let seq = 0; // internal ids used for list toggles
 
@@ -48,6 +50,11 @@ function initializeMap() {
   }
 }
 
+window.addEventListener('sd:language', () => {
+  const el = document.getElementById('selection-count');
+  if (el && lettersData.length && !document.querySelector('#selected-letters h3')) el.textContent = MT('map.withPlace', { n: lettersData.length });
+});
+
 async function loadLettersForMap() {
   const BASE = (window.SITE_BASE || '').replace(/\/+$/, '');
   try {
@@ -87,7 +94,7 @@ async function loadLettersForMap() {
             L.polyline([[letter.la, letter.lo], [m.lat, m.lon]],
               { color: '#8c2f1b', weight: 1.5, opacity: .65, dashArray: '4,4' }).addTo(mentionLayer);
             L.circleMarker([m.lat, m.lon], { radius: 6, color: '#8c2f1b', weight: 2, fillOpacity: .15 })
-              .bindTooltip(`${m.region ? '▦' : '📍'} ${m.name || m.text} — nevnt i brevet`).addTo(mentionLayer);
+              .bindTooltip(`${m.region ? '▦' : '📍'} ${m.name || m.text} — ${MT('map.mentioned')}`).addTo(mentionLayer);
           }
           mentionLayer.addTo(map);
         }
@@ -114,11 +121,11 @@ async function loadLettersForMap() {
     }
 
     const el = document.getElementById('selection-count');
-    if (el) el.textContent = `${lettersData.length} brev med stedsinformasjon`;
+    if (el) el.textContent = MT('map.withPlace', { n: lettersData.length });
   } catch (error) {
     console.error('Feil ved lasting av kartdata:', error);
     const el = document.getElementById('selected-letters');
-    if (el) el.innerHTML = `<p style="color:#b00">Klarte ikke å laste kartdata. Sjekk at <code>/data/v3/map.json</code> finnes.</p>`;
+    if (el) el.innerHTML = `<p style="color:#b00">${MT('map.loadError')} <code>/data/v3/map.json</code></p>`;
   }
 }
 
@@ -157,7 +164,7 @@ function renderMapPopup(letter, summary = '') {
   const badges = renderSourceBadges(letter);
   const refs = renderReferencesLine(letter);
   const date = formatDateRange(letter.ds, letter.de, letter.od);
-  const place = letter.p || 'Ukjent sted';
+  const place = letter.p || MT('letter.unknown.place');
 
   return `
     <div class="map-popup">
@@ -166,7 +173,7 @@ function renderMapPopup(letter, summary = '') {
       <p class="popup-meta"><strong>${escapeHtml(date)}</strong> - ${escapeHtml(place)}</p>
       ${summary ? `<p class="popup-summary">${escapeHtml(summary)}</p>` : ''}
       <p class="popup-actions">
-        <button class="popup-show-letter btn-link" data-letter-id="${letter.__id}">Vis brevet</button>
+        <button class="popup-show-letter btn-link" data-letter-id="${letter.__id}">${MT('map.showLetter')}</button>
       </p>
     </div>
   `;
@@ -246,8 +253,13 @@ function formatRef(ref, sourceKey) {
     if (m) return `SDHK ${parseInt(m[1], 10)}`;
   }
   if (sourceKey === 'DD') {
-    const m = refStr.match(/^DD[_-]?(\d+)$/i);
-    if (m) return `DD ${parseInt(m[1], 10)}`;
+    let d = refStr.match(/^DD_(\d{2})_R(\d)_(\d{5})$/i);
+    if (d) return `DD ${d[2]}. rk. ${toRoman(parseInt(d[1], 10))} nr. ${parseInt(d[3], 10)}`;
+    d = refStr.match(/^DD(\d{4})(\d{2})(\d{2})(\d{3})$/i);
+    if (d) {
+      const date = d[2] === '99' ? d[1] : d[3] === '99' ? `${d[1]}-${d[2]}` : `${d[1]}-${d[2]}-${d[3]}`;
+      return `DD ${date} nr. ${parseInt(d[4], 10)}`;
+    }
   }
   if (sourceKey === 'DF') {
     const m = refStr.match(/^DF[_-]?(\d+)$/i);
@@ -332,18 +344,18 @@ function displaySelectedLetters(letters) {
   document.getElementById('export-txt').disabled = !enable;
 
   if (!letters.length) {
-    container.innerHTML = '<p>Ingen brev i valgt område</p>';
+    container.innerHTML = `<p>${MT('map.noneInArea')}</p>`;
     const sc = document.getElementById('selection-count');
-    if (sc) sc.textContent = `${lettersData.length} brev med stedsinformasjon`;
+    if (sc) sc.textContent = MT('map.withPlace', { n: lettersData.length });
     return;
   }
 
   const html = `
-    <h3>${letters.length} brev i valgt område</h3>
+    <h3>${MT('map.inArea', { n: letters.length })}</h3>
     <div class="letter-list">
       ${letters.map(l => {
         const date = formatDateRange(l.ds, l.de, l.od);
-        const place = l.p || 'Ukjent sted';
+        const place = l.p || MT('letter.unknown.place');
         const refs = renderReferencesLine(l);
         const badges = renderSourceBadges(l);
 
@@ -359,7 +371,7 @@ function displaySelectedLetters(letters) {
             <span class="letter-place">${escapeHtml(place)}</span>
           </div>
           <div class="letter-actions">
-            <button class="toggle-details btn-link" aria-expanded="false">Vis detaljer</button>
+            <button class="toggle-details btn-link" aria-expanded="false">${MT('letter.show')}</button>
           </div>
 
           <div class="details" style="display:none;" data-idx="${l.i}">
@@ -425,7 +437,7 @@ function wireButtons() {
       drawnItems.clearLayers();
       document.getElementById('selected-letters').innerHTML = '';
       const sc = document.getElementById('selection-count');
-      if (sc) sc.textContent = `${lettersData.length} brev med stedsinformasjon`;
+      if (sc) sc.textContent = MT('map.withPlace', { n: lettersData.length });
       currentSelection = [];
       document.getElementById('export-csv').disabled = true;
       document.getElementById('export-txt').disabled = true;
@@ -467,7 +479,7 @@ function toTXT_likeDetails(rows) {
 
     const refs = renderReferencesLine(l) || 'Uten referanse';
     const dateLine = formatDateRange(l.ds, l.de, l.od);
-    const place = l.p || 'Ukjent sted';
+    const place = l.p || MT('letter.unknown.place');
 
     const bits = [];
     bits.push(`ID: ${l.id || 'Ukjent'}`);
