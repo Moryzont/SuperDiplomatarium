@@ -110,7 +110,9 @@ function applyUrlParams() {
 async function getIndex(name) {
   if (STATE.pf[name]) return STATE.pf[name];
   const mod = await import(`${V3()}/pagefind-${name}/pagefind.js`);
-  await mod.options({ excerptLength: 40 });
+  // the regest index is stemmed Norwegian; letter texts and place names are
+  // indexed without stemming under the code 'la' (see scripts/build-search-v3.mjs)
+  await mod.options({ excerptLength: 40, language: name === 'main' ? 'no' : 'la' });
   await mod.init();
   STATE.pf[name] = mod;
   return mod;

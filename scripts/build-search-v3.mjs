@@ -123,8 +123,11 @@ function* loadLetters() {
 }
 
 // ---------- build ----------
-async function buildIndex(name, recordFn) {
-  const { index } = await pagefind.createIndex({ forceLanguage: 'no' });
+// language: 'no' gives Norwegian stemming, right for the modern regests; the
+// letter texts (Latin, Old Norse, Middle Low German) and place names must
+// not be stemmed, so those indexes use a code without a stemmer ('la').
+async function buildIndex(name, recordFn, language = 'no') {
+  const { index } = await pagefind.createIndex({ forceLanguage: language });
   let added = 0, skipped = 0;
   for (const [i, r] of loadLetters()) {
     const rec = recordFn(i, r);
@@ -190,8 +193,8 @@ async function main() {
   if (wants('fulltext')) await buildIndex('pagefind-fulltext', (i, r) => {
     if (!r.brevtekst || r.brevtekst.length < 50) return null;
     const c = common(i, r);
-    return { url: c.url, content: r.brevtekst, language: 'no', meta: c.meta, sort: c.sort, filters: c.filters };
-  });
+    return { url: c.url, content: r.brevtekst, language: 'la', meta: c.meta, sort: c.sort, filters: c.filters };
+  }, 'la');
 
   // 3. Place index: place names only.
   if (wants('place')) await buildIndex('pagefind-place', (i, r) => {
@@ -202,8 +205,8 @@ async function main() {
     // Place-index content is just place names, so excerpts make poor previews;
     // carry a short summary in meta for the result card instead.
     const meta = { ...c.meta, s: trunc(r.sammendrag || r.regest || '', 150) };
-    return { url: c.url, content: places.join(', '), language: 'no', meta, sort: c.sort, filters: c.filters };
-  });
+    return { url: c.url, content: places.join(', '), language: 'la', meta, sort: c.sort, filters: c.filters };
+  }, 'la');
 
   // 4. Core table: compact arrays, position = global index (matches full-XX.json chunks).
   //    Fields: [SD_ID, DN, RN, SDHK, DD, DF, src, ds, de, rel]
