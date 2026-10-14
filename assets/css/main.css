@@ -685,6 +685,11 @@
     justify-content: center;
     margin-top: clamp(10px, 1.2vw, 14px);
   }
+  @media (max-width: 480px) {
+    /* phones: the pills share the card's width instead of overflowing it */
+    .fig-actions{ flex-wrap: wrap; }
+    .fig-actions .btn-olive{ min-width: 0; flex: 1 1 120px; }
+  }
   
   /* Palette-only olive button variant */
   .btn-olive{
