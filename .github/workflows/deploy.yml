@@ -28,7 +28,21 @@ jobs:
       - run: gem install jekyll --no-document
       - run: npm ci
 
+      # The built data (three Pagefind indexes, map, detail files, vocabulary:
+      # ~500 MB, 320k files, 6–7 min to build) depends only on the chunks and the
+      # build script, so it is cached on those; a change to pages or scripts
+      # alone skips the fetch and the build.
+      - name: Restore the built data from the cache
+        id: built
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/v3
+            data/optimized
+          key: site-data-${{ hashFiles('data/chunks.manifest.json', 'scripts/build-search-v3.mjs', 'package-lock.json') }}
+
       - name: Fetch the letter chunks (release asset named in data/chunks.manifest.json)
+        if: steps.built.outputs.cache-hit != 'true'
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
           tag=$(python3 -c "import json; print(json.load(open('data/chunks.manifest.json'))['tag'])")
@@ -39,6 +53,7 @@ jobs:
           echo "chunks: $(ls data/chunks | wc -l) files from $tag"
 
       - name: Build search indexes, map data and detail store (from data/chunks)
+        if: steps.built.outputs.cache-hit != 'true'
         run: node scripts/build-search-v3.mjs
 
       - name: Expose the letter count to Jekyll (front page reads site.data.metadata)
@@ -80,5 +95,7 @@ jobs:
           external_repository: Moryzont/SuperDiplomatarium-staging
           publish_branch: gh-pages
           publish_dir: ./_site
-          force_orphan: true
+          # No force_orphan: an orphan commit re-hashes and re-uploads all 256k
+          # files (11 min); an ordinary commit carries only what changed, and
+          # Pagefind's files are content-hashed, so unchanged data is free.
           commit_message: "Staging deploy from SuperDiplomatarium@${{ github.sha }}"
