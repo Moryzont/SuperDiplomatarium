@@ -83,6 +83,25 @@ after a sync.
 
 `_config_local.yaml` is for local builds only — deployment must serve `data/`.
 
+## Where a search's time goes (staging, 2026-10-14)
+
+Traced with a headless browser against the CDN:
+
+- the first search on an index downloads its worker, wasm and a ~1.5 MB
+  metadata file (sort keys and filters for every page; already compressed) —
+  now fetched at page load / field change (`warmIndexes`);
+- the index chunk for a word is small (60–340 KB);
+- Pagefind's ranking costs ~0.05 ms per hit: 0.8 s for the 16,389 hits of
+  "biskop", plus 0.6 s to sort them; a rare word takes 0.3–0.4 s in all;
+- typing used to fire a search per keystroke; now only `preload` runs while
+  typing and the search starts 400 ms after the last keystroke, from three
+  letters on.
+
+Not done: a service worker caching `data/v3/**` across visits (plan phase 3);
+dropping the `ddesc` sort key is not possible because Pagefind omits pages
+without a sort key when sorting by it, and undated letters must sort last
+in both directions.
+
 ## Measured (local, 106,997 letters)
 
 | | v2 | v3 |
