@@ -100,29 +100,39 @@
     .navbar .container{ flex-wrap: wrap; }
     .nav-toggle{
       display: inline-block; margin-left: auto;
-      background: transparent; border: 1px solid var(--c-olive); border-radius: 6px;
-      color: var(--c-dark); font-size: 1.25rem; line-height: 1; padding: .25rem .5rem; cursor: pointer;
+      background: var(--c-light); border: 2px solid var(--c-olive); border-radius: 8px;
+      color: var(--c-dark); font-size: 1.1rem; line-height: 1; padding: .3rem .6rem; cursor: pointer;
     }
+    .nav-toggle:hover, .nav-toggle[aria-expanded="true"]{ background: var(--c-olive); color: var(--c-light); }
     .nav-links{ display: none; flex-basis: 100%; flex-direction: column; gap: .25rem; margin: .5rem 0 0; }
     .nav-links.is-open{ display: flex; }
   }
 
   /* Language toggle button */
+  /* Button system (2026-10-14): one primary (the clay Søk button), one
+     secondary (olive outline, olive fill on hover) for every other boxed
+     button, and the clay link style for in-text actions (Vis detaljer). */
+  .btn-secondary,
   .lang-toggle {
-    background: transparent;
-    border: 1px solid var(--c-olive);
-    color: var(--c-olive);
-    padding: 0.25rem 0.6rem;
-    border-radius: 6px;
-    font-size: 0.85rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--c-light);
+    border: 2px solid var(--c-olive);
+    color: var(--c-dark);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
     font-weight: 600;
+    font-family: inherit;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background .15s ease, color .15s ease, border-color .15s ease;
   }
+  .btn-secondary:hover:not([disabled]),
   .lang-toggle:hover {
     background: var(--c-olive);
     color: var(--c-light);
   }
+  .btn-secondary[disabled] { opacity: .5; cursor: not-allowed; }
+  .lang-toggle { padding: 0.3rem 0.7rem; font-size: 0.85rem; }
   
   /* ---------- Headings with Carolingian flavour ---------- */
   .hero-title,
@@ -690,8 +700,8 @@
     transition: transform .02s ease, background .15s ease, border-color .15s ease;
   }
   .btn-olive:hover{
-    background: var(--c-sand);
-    border-color: var(--c-sand);
+    background: var(--c-dark);
+    border-color: var(--c-dark);
     color: var(--c-light);
   }
   .btn-olive:active{ transform: translateY(1px); }
@@ -1800,15 +1810,18 @@ mark {
 .external-link-btn {
   display: inline-block;
   padding: .35rem .75rem;
-  background: var(--c-olive);
-  color: var(--c-light) !important;
-  border-radius: 4px;
+  background: var(--c-light);
+  border: 2px solid var(--c-olive);
+  color: var(--c-dark) !important;
+  border-radius: 8px;
+  font-weight: 600;
   font-size: .85rem;
   text-decoration: none !important;
 }
 
 .external-link-btn:hover {
-  background: var(--c-dark);
+  background: var(--c-olive);
+  color: var(--c-light) !important;
 }
 
 .external-links a:hover {
