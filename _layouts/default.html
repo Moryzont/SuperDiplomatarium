@@ -48,6 +48,8 @@
     </div>
   </footer>
   <script>
+    // Data files are kept between visits by a service worker (sw.js); it never serves pages or scripts.
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('{{ "/sw.js" | relative_url }}').catch(function () {});
     // Mobile menu: the ☰ button (shown by CSS under 640px) opens and closes the nav links.
     (function () {
       var btn = document.querySelector('.nav-toggle'), links = document.getElementById('nav-links');

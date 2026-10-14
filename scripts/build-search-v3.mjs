@@ -8,7 +8,7 @@
  *   core.json           Compact per-letter table (ID search, related-source lookups, export)
  *
  * Record order follows the chunk files, so the array position in core.json equals
- * the global index used by data/optimized/full-XX.json (full_chunk_size = 500).
+ * the global index used by data/optimized/full-XX.json (full_chunk_size = 100).
  *
  * Also writes data/optimized/full-XX.json: the on-demand full-record store used
  * by the search detail view and map popups (500 letters per chunk, addressed by
@@ -229,7 +229,7 @@ async function main() {
     const coreOut = {
       version: 3,
       generated: new Date().toISOString(),
-      full_chunk_size: 500,
+      full_chunk_size: 100,
       n: core.length,
       fields: ['id', 'd', 'r', 'sdhk', 'dd', 'df', 'src', 'ds', 'de', 'rel'],
       records: core,
@@ -256,7 +256,7 @@ async function main() {
     const mapOut = {
       version: 3,
       generated: new Date().toISOString(),
-      full_chunk_size: 500,
+      full_chunk_size: 100,
       n: rows.length,
       fields: ['idx', 'la', 'lo', 'id', 'd', 'r', 'sdhk', 'dd', 'df', 'src', 'ds', 'de', 'od', 'p'],
       records: rows,
@@ -274,7 +274,7 @@ async function main() {
     for (const f of fs.readdirSync(FULL_DIR)) {
       if (/^full-\d+\.json$/.test(f)) fs.unlinkSync(path.join(FULL_DIR, f));
     }
-    const FULL_CHUNK = 500;
+    const FULL_CHUNK = 100;   // 100 letters per detail file: ~110 KB gzipped per "Vis detaljer" instead of ~550 KB
     let buf = [], chunkNo = 0, total = 0;
     const flush = () => {
       if (!buf.length) return;

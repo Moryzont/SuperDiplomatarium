@@ -19,7 +19,8 @@ data/v3/
                           letter and length (17 MB in all); fuzzy search fetches the few
                           buckets a query word can be within edit distance of
 
-data/optimized/full-XX.json           full records for the detail view (unchanged from v2)
+data/optimized/full-XX.json           full records for the detail view, 100 letters per file
+                                      (~75 KB gzipped per "Vis detaljer"; was 500 per file, ~550 KB)
 ```
 
 - **Filters** (source databases, year range) and **sorting** (date asc/desc,
@@ -97,7 +98,11 @@ Traced with a headless browser against the CDN:
   typing and the search starts 400 ms after the last keystroke, from three
   letters on.
 
-Not done: a service worker caching `data/v3/**` across visits (plan phase 3);
+A service worker (`sw.js`, registered by the layout) keeps every `data/` file
+in the browser between visits, in a cache named after the build; a new
+deploy drops the previous cache. Pages, CSS and JS are never served from it.
+
+Not done:
 dropping the `ddesc` sort key is not possible because Pagefind omits pages
 without a sort key when sorting by it, and undated letters must sort last
 in both directions.
