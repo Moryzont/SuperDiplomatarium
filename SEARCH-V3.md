@@ -13,7 +13,11 @@ data/v3/
 ├── pagefind-main/        index over sammendrag/regest — every letter (61 MB)
 ├── pagefind-fulltext/    index over brevtekst — 49,738 letters with body text (115 MB)
 ├── pagefind-place/       index over place-name fields — 69,418 letters (35 MB)
-└── core.json             compact table for ID search + related-source lookups (1.5 MB gzipped)
+├── core.json             compact table for ID search + related-source lookups (1.1 MB gzipped;
+│                         loaded in the background, awaited only where needed)
+└── vocab/<letter>/<len>.json   every word of the corpus with its frequency, by first
+                          letter and length (17 MB in all); fuzzy search fetches the few
+                          buckets a query word can be within edit distance of
 
 data/optimized/full-XX.json           full records for the detail view (unchanged from v2)
 ```
@@ -39,7 +43,15 @@ data/optimized/full-XX.json           full records for the detail view (unchange
 - Letters without any parseable date are **excluded** when a date filter is
   active (v2 included them).
 - Word-based matching with Norwegian stemming + prefix matching instead of raw
-  substring matching.
+  substring matching (regests only; letter texts and place names are not stemmed).
+- Fuzzy search (Søkemodus: Uskarpt, the default, as on the 2025 site) is done
+  client-side: each query word is expanded to the corpus spellings within a
+  small edit distance (`fuzzyCandidates`: distance 1 from 5 letters, 2 from 9;
+  "vid" allows one more), every candidate is its own Pagefind search and the
+  result sets are merged in the chosen sort order (`mergedResults`, which
+  resolves only the heads of the queues). A word with 3,000+ exact hits is not
+  expanded — Pagefind's cost grows with the result count and the variants of
+  a common word add noise. Multi-word queries keep AND semantics.
 
 ## Build & test locally
 

@@ -10,10 +10,11 @@
  *   data/v3/core.json           compact table: ID search, related-source lookups
  *   data/optimized/full-XX.json full records, fetched on demand (unchanged from v2)
  *
- * The browser no longer loads the whole corpus. Initial payload is core.json
- * (~2 MB gzipped); each query fetches only the index shards and result
- * fragments it needs. Source and year filters resolve inside the index;
- * date sorting uses prebuilt sort keys.
+ * The browser no longer loads the whole corpus. core.json (~1 MB gzipped)
+ * loads in the background and is awaited only by ID searches and the
+ * related-source toggles; each query fetches only the index shards and
+ * result fragments it needs. Source and year filters resolve inside the
+ * index; date sorting uses prebuilt sort keys.
  */
 
 // ===================== Configuration =====================
@@ -33,7 +34,7 @@ const STATE = {
   fullDataCache: new Map(),
   fullChunksLoaded: new Set(),
   fullChunkSize: 500,
-  currentResults: [],       // unified result handles (see makePfHandle/makeCoreHandle)
+  currentResults: null,     // a result list: { length, get(a, b), all() } of handles (see arrayResults/mergedResults)
   currentQuery: '',
   currentPage: 1,
   activeSearchSeq: 0,
@@ -68,24 +69,43 @@ function updateStatus(msg, isError = false) {
   }
 }
 
+// core.json (~1 MB gzipped) is only needed for ID searches and for the
+// related-source toggles on result cards, so it loads in the background and
+// the page is usable as soon as the script runs; text searches go straight
+// to Pagefind. ensureCore() awaits it where it is really needed.
 async function initializeSearch() {
   updateStatus('Laster inn...');
-  try {
+  STATE.currentResults = arrayResults([]);
+  STATE.corePromise = (async () => {
     const res = await fetch(`${V3()}/core.json`);
     if (!res.ok) throw new Error(`HTTP ${res.status} loading core.json`);
-    STATE.core = await res.json();
-    STATE.fullChunkSize = STATE.core.full_chunk_size || 500;
-    const recs = STATE.core.records;
-    for (let i = 0; i < recs.length; i++) {
-      STATE.sdIdToIndex.set(recs[i][C.id], i);
-    }
-    STATE.isLoading = false;
-    updateStatus(`${recs.length} brev klare for søk.`);
-  } catch (err) {
+    const core = await res.json();
+    for (let i = 0; i < core.records.length; i++) STATE.sdIdToIndex.set(core.records[i][C.id], i);
+    STATE.fullChunkSize = core.full_chunk_size || 500;
+    STATE.core = core;
+    return core;
+  })();
+  STATE.corePromise.catch(err => {
     console.error('Init error:', err);
     updateStatus('Kunne ikke laste data. Prøv å laste siden på nytt.', true);
-    STATE.isLoading = false;
-  }
+  });
+  STATE.isLoading = false;
+  try {
+    const res = await fetch(`${BASE()}/data/metadata.json`);
+    const meta = res.ok ? await res.json() : null;
+    if (meta?.total_letters) {
+      updateStatus(`${meta.total_letters} brev klare for søk.`);
+      return;
+    }
+  } catch (err) { /* fall through: the count comes with the core table */ }
+  try {
+    const core = await STATE.corePromise;
+    updateStatus(`${core.records.length} brev klare for søk.`);
+  } catch (err) { /* already reported */ }
+}
+
+async function ensureCore() {
+  return STATE.core || STATE.corePromise;
 }
 
 // Deep links: /sok/?id=SD20011494 or ?q=...&felt=...
@@ -145,6 +165,7 @@ function ordToIso(ord) {
 
 // ===================== On-Demand Full Data (same store as v2) =====================
 async function loadFullDataForIndices(indices) {
+  await ensureCore();   // the chunk size comes with the core table
   const chunksNeeded = new Set();
   for (const idx of indices) {
     if (!STATE.fullDataCache.has(idx)) {
@@ -203,6 +224,7 @@ function makePfHandle(pfResult) {
         rel: m.rel ? JSON.parse(m.rel) : [],
         ds: m.ds || '',
         de: m.de || '',
+        c: m.c ? parseInt(m.c, 10) : 0,
         od: m.od || '',
         p: m.p || '',
         s: m.s || excerptToText(data.excerpt),
@@ -220,6 +242,7 @@ function makeCoreHandle(idx) {
     idx,
     async resolve() {
       if (cached) return cached;
+      await ensureCore();
       await loadFullDataForIndices([idx]);
       const cl = coreLetter(idx);
       const full = getFullData(idx) || {};
@@ -332,10 +355,212 @@ function buildPfOptions() {
   return opts;
 }
 
-async function pfSearch(indexName, query, opts) {
+async function pfSearchRaw(indexName, query, opts) {
   const pf = await getIndex(indexName);
   const res = await pf.search(query, opts);
-  return res.results.map(makePfHandle);
+  return res.results;
+}
+
+async function pfSearch(indexName, query, opts) {
+  return (await pfSearchRaw(indexName, query, opts)).map(makePfHandle);
+}
+
+// ===================== Result lists =====================
+// A result list hides whether the results are a plain array or a lazy merge
+// of several Pagefind result sets (fuzzy search): { length, get(a, b), all() }.
+function arrayResults(handles) {
+  return {
+    length: handles.length,
+    async get(a, b) { return handles.slice(a, b); },
+    async all() { return handles; }
+  };
+}
+
+// Merge several Pagefind result arrays that were each sorted with the same
+// sort option, keeping that order. Pagefind does not expose sort keys, so the
+// merge resolves only the heads of the queues (small fragment files) and
+// takes the smallest; a page of 20 results costs ~20 + k fragment fetches.
+// `keep`: a Set of result ids (null = all); a result id occurring in several
+// arrays is taken once.
+function mergedResults(lists, keep, sortMode) {
+  const seen = new Set();
+  const queues = [];
+  for (const list of lists) {
+    const q = [];
+    for (const r of list) {
+      if ((keep && !keep.has(r.id)) || seen.has(r.id)) continue;
+      seen.add(r.id);
+      q.push(makePfHandle(r));
+    }
+    if (q.length) queues.push(q);
+  }
+  const heads = queues.map(() => 0);
+  const out = [];
+  const before = sortMode === 'date-desc'
+    ? (x, y) => (x.ds || '\u0000') > (y.ds || '\u0000')          // newest first, undated last
+    : sortMode === 'completeness'
+      ? (x, y) => (x.c || 0) > (y.c || 0)
+      : (x, y) => (x.ds || '￿') < (y.ds || '￿');       // oldest first, undated last
+  const PREFETCH = 4;
+
+  async function fill(n) {
+    while (out.length < n) {
+      const live = [];
+      for (let j = 0; j < queues.length; j++) if (heads[j] < queues[j].length) live.push(j);
+      if (!live.length) break;
+      const headLetters = await Promise.all(live.map(j => {
+        for (let k = 1; k <= PREFETCH && heads[j] + k < queues[j].length; k++) queues[j][heads[j] + k].resolve().catch(() => null);
+        return queues[j][heads[j]].resolve().catch(() => null);
+      }));
+      let best = 0;
+      for (let k = 1; k < live.length; k++) {
+        if (!headLetters[best]) { best = k; continue; }
+        if (headLetters[k] && before(headLetters[k], headLetters[best])) best = k;
+      }
+      const j = live[best];
+      const h = queues[j][heads[j]++];
+      if (headLetters[best]) out.push(h);
+    }
+  }
+  return {
+    length: seen.size,
+    async get(a, b) { await fill(b); return out.slice(a, b); },
+    async all() { await fill(Infinity); return out; }
+  };
+}
+
+// ===================== Fuzzy search =====================
+// Fuzzy = each query word is expanded to the spellings in the corpus within a
+// small edit distance (vocabulary buckets built by scripts/build-search-v3.mjs),
+// every candidate is searched as its own Pagefind query, and the result sets
+// are merged in the chosen sort order. Multi-word queries keep Pagefind's
+// AND semantics: a letter must match some candidate of every word.
+const FUZZY = {
+  index: null,            // vocab/index.json: letter -> [lengths]
+  buckets: new Map(),     // "letter/len" -> Promise<[word, count][]>
+  maxCandidates: { 1: 5, 2: 8 },
+  expandBelow: 3000,      // no variant searches for a word with this many exact hits
+  // first letters that are often interchangeable in the sources; a query word's
+  // first letter is also looked up in these buckets
+  firstLetterGroups: [['c', 'k', 'q'], ['v', 'w', 'u', 'f'], ['i', 'j', 'y'], ['æ', 'e', 'ä'], ['ø', 'o', 'ö'], ['å', 'a'], ['t', 'þ', 'd'], ['s', 'z'], ['b', 'p'], ['g', 'k']]
+};
+
+function fuzzyLevel() {
+  const v = document.getElementById('search-mode')?.value || 'fuzzy';
+  return v === 'fuzzy2' ? 2 : v === 'fuzzy' ? 1 : 0;
+}
+
+function fuzzyMaxDistance(len, level) {
+  if (level >= 2) return len >= 11 ? 3 : len >= 6 ? 2 : len >= 3 ? 1 : 0;
+  return len >= 9 ? 2 : len >= 5 ? 1 : 0;
+}
+
+function vocabLetter(ch) {
+  return /^[a-z]$/.test(ch) ? ch : `u${ch.codePointAt(0).toString(16)}`;
+}
+
+async function vocabIndex() {
+  if (!FUZZY.index) {
+    FUZZY.index = fetch(`${V3()}/vocab/index.json`).then(r => r.ok ? r.json() : {}).catch(() => ({}));
+  }
+  return FUZZY.index;
+}
+
+function vocabBucket(letter, len) {
+  const key = `${letter}/${len}`;
+  if (!FUZZY.buckets.has(key)) {
+    FUZZY.buckets.set(key, fetch(`${V3()}/vocab/${letter}/${len}.json`).then(r => r.ok ? r.json() : []).catch(() => []));
+  }
+  return FUZZY.buckets.get(key);
+}
+
+// Optimal string alignment distance (Levenshtein + adjacent transposition),
+// returning Infinity as soon as the distance exceeds `max`.
+function editDistance(a, b, max) {
+  const n = a.length, m = b.length;
+  if (Math.abs(n - m) > max) return Infinity;
+  let prev2 = null, prev = new Array(m + 1), cur = new Array(m + 1);
+  for (let j = 0; j <= m; j++) prev[j] = j;
+  for (let i = 1; i <= n; i++) {
+    cur[0] = i;
+    let rowMin = i;
+    const ai = a.charCodeAt(i - 1);
+    for (let j = 1; j <= m; j++) {
+      const cost = ai === b.charCodeAt(j - 1) ? 0 : 1;
+      let v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+      if (i > 1 && j > 1 && ai === b.charCodeAt(j - 2) && a.charCodeAt(i - 2) === b.charCodeAt(j - 1)) {
+        v = Math.min(v, prev2[j - 2] + 1);
+      }
+      cur[j] = v;
+      if (v < rowMin) rowMin = v;
+    }
+    if (rowMin > max) return Infinity;
+    [prev2, prev, cur] = [prev, cur, prev2 || new Array(m + 1)];
+  }
+  return prev[m];
+}
+
+// The corpus spellings within reach of one query word, best first.
+async function fuzzyCandidates(word, level) {
+  const d = fuzzyMaxDistance(word.length, level);
+  if (!d) return [word];
+  const index = await vocabIndex();
+  const letters = new Set([word[0]]);
+  for (const g of FUZZY.firstLetterGroups) if (g.includes(word[0])) g.forEach(l => letters.add(l));
+  if (word.length > 1) letters.add(word[1]);          // first letter missing in the query
+  const wanted = [];
+  for (const l of letters) {
+    const key = vocabLetter(l);
+    for (const len of index[key] || []) {
+      if (Math.abs(len - Math.min(word.length, 24)) <= d) wanted.push([key, len]);
+    }
+  }
+  const buckets = await Promise.all(wanted.map(([k, len]) => vocabBucket(k, len)));
+  const scored = [];
+  for (const bucket of buckets) {
+    for (const [w, n] of bucket) {
+      // a strict prefix of the query would only re-find the query's own prefix
+      // matches (plus more noise) at the full cost of a large search
+      if (w === word || word.startsWith(w)) continue;
+      const dist = editDistance(word, w, d);
+      if (dist <= d) scored.push([w, n / (1 + 2 * dist), dist]);
+    }
+  }
+  scored.sort((x, y) => y[1] - x[1]);
+  return [word, ...scored.slice(0, FUZZY.maxCandidates[level] || 6).map(x => x[0])];
+}
+
+function queryWords(rawQuery) {
+  return (rawQuery.toLowerCase().match(/\p{L}+/gu) || []).filter(w => w.length >= 2);
+}
+
+// A fuzzy search over one index -> result list. Exact mode = plain Pagefind.
+async function searchIndex(indexName, rawQuery, opts) {
+  const level = fuzzyLevel();
+  const words = queryWords(rawQuery);
+  if (!level || !words.length || words.length > 6) {
+    return arrayResults(await pfSearch(indexName, rawQuery, opts));
+  }
+  const lists = [];
+  let keep = null;
+  for (let j = 0; j < words.length; j++) {
+    // Pagefind's cost grows with the result count (~0.1 ms per result), so a
+    // word that already matches thousands of letters is not expanded: its
+    // variants would add little but noise at several times the cost.
+    const exact = await pfSearchRaw(indexName, words[j], opts);
+    let results = [exact];
+    if (exact.length < FUZZY.expandBelow) {
+      const candidates = (await fuzzyCandidates(words[j], level)).slice(1);
+      results = results.concat(await Promise.all(candidates.map(c => pfSearchRaw(indexName, c, opts))));
+    }
+    if (words.length > 1) {
+      const ids = new Set();
+      for (const rs of results) for (const r of rs) ids.add(r.id);
+      keep = keep ? new Set([...keep].filter(id => ids.has(id))) : ids;
+    }
+    lists.push(...results);
+  }
+  return mergedResults(lists, keep, getSortMode());
 }
 
 // ===================== Core-table search (IDs) =====================
@@ -355,7 +580,8 @@ function matchesYearRange(rec, fromYear, toYear) {
   return true;
 }
 
-function coreIdSearch(rawQuery) {
+async function coreIdSearch(rawQuery) {
+  await ensureCore();
   const parsed = parseIdQuery(rawQuery);
   const dbs = getSelectedDatabases();
   const { fromYear, toYear } = readUIYearRange();
@@ -415,7 +641,7 @@ async function performSearch() {
   const searchField = getSearchField();
 
   STATE.currentQuery = rawQuery;
-  STATE.currentResults = [];
+  STATE.currentResults = arrayResults([]);
   STATE.currentPage = 1;
 
   if (!rawQuery && !hasDateFilter) {
@@ -435,39 +661,39 @@ async function performSearch() {
   const startTime = performance.now();
 
   try {
-    let handles = [];
+    let results = arrayResults([]);
 
     if (!rawQuery) {
       // Date/source filter only: browse via the main index (covers every letter)
-      handles = await pfSearch('main', null, buildPfOptions());
+      results = arrayResults(await pfSearch('main', null, buildPfOptions()));
     } else if (searchField === 'id' || (searchField === 'all' && parseIdQuery(rawQuery).type === 'id')) {
-      handles = coreIdSearch(rawQuery);
+      results = arrayResults(await coreIdSearch(rawQuery));
     } else if (searchField === 'text') {
-      handles = await pfSearch('main', rawQuery, buildPfOptions());
+      results = await searchIndex('main', rawQuery, buildPfOptions());
     } else if (searchField === 'fulltext') {
-      handles = await pfSearch('fulltext', rawQuery, buildPfOptions());
+      results = await searchIndex('fulltext', rawQuery, buildPfOptions());
     } else if (searchField === 'place') {
-      handles = await pfSearch('place', rawQuery, buildPfOptions());
+      results = await searchIndex('place', rawQuery, buildPfOptions());
     } else if (searchField === 'all') {
       // Text + place + fulltext + ID substring, deduplicated by index order of priority
       const opts = buildPfOptions();
       const [main, place, fulltext] = await Promise.all([
-        pfSearch('main', rawQuery, opts),
-        pfSearch('place', rawQuery, opts),
-        pfSearch('fulltext', rawQuery, opts)
+        searchIndex('main', rawQuery, opts).then(l => l.all()),
+        searchIndex('place', rawQuery, opts).then(l => l.all()),
+        searchIndex('fulltext', rawQuery, opts).then(l => l.all())
       ]);
-      const idHits = coreIdSearch(rawQuery);
-      handles = await dedupeHandles([...main, ...idHits, ...place, ...fulltext]);
+      const idHits = await coreIdSearch(rawQuery);
+      results = arrayResults(await dedupeHandles([...main, ...idHits, ...place, ...fulltext]));
     }
 
     if (seq !== STATE.activeSearchSeq) return;
 
-    STATE.currentResults = handles;
+    STATE.currentResults = results;
     await renderPage();
     if (seq !== STATE.activeSearchSeq) return;
     const elapsed = (performance.now() - startTime).toFixed(0);
-    updateStatus(`${handles.length} treff (${elapsed} ms)`);
-    setExportEnabled(handles.length > 0);
+    updateStatus(`${results.length} treff (${elapsed} ms)`);
+    setExportEnabled(results.length > 0);
   } catch (err) {
     console.error('Search error:', err);
     if (seq === STATE.activeSearchSeq) updateStatus('Søket feilet. Prøv på nytt.', true);
@@ -517,8 +743,10 @@ async function renderPage() {
 
   const start = (STATE.currentPage - 1) * CONFIG.PAGE_SIZE;
   const end = Math.min(start + CONFIG.PAGE_SIZE, total);
-  const pageHandles = STATE.currentResults.slice(start, end);
+  const pageHandles = await STATE.currentResults.get(start, end);
   const letters = (await resolveAll(pageHandles)).filter(Boolean);
+  // the related-source toggles on a card need the core table
+  if (letters.some(l => l.rel && l.rel.length)) await ensureCore();
 
   await updateResultsView(letters, start + 1, end, total);
   renderPagination(total);
@@ -800,6 +1028,7 @@ async function updateCardWithSource(originalIdx, newSourceIdx) {
   const card = document.querySelector(`.search-result[data-idx="${originalIdx}"]`);
   if (!card) return;
 
+  await ensureCore();
   const original = coreLetter(originalIdx);
   const newCore = coreLetter(newSourceIdx);
   if (!original || !newCore) return;
@@ -902,6 +1131,7 @@ function wireListeners() {
 
   // Sorting is index-side, so a sort change re-runs the query
   document.getElementById('sort-mode')?.addEventListener('change', performSearch);
+  document.getElementById('search-mode')?.addEventListener('change', performSearch);
 
   const df = document.getElementById('date-from');
   const dt = document.getElementById('date-to');
@@ -1059,7 +1289,7 @@ async function downloadExport(format) {
   }
 
   updateStatus(`Forbereder eksport av ${n} treff...`);
-  const letters = (await resolveAll(STATE.currentResults, (done, total) =>
+  const letters = (await resolveAll(await STATE.currentResults.all(), (done, total) =>
     updateStatus(`Forbereder eksport... ${done}/${total}`))).filter(Boolean);
   await loadFullDataForIndices(letters.map(l => l.i));
 
@@ -1101,3 +1331,8 @@ function downloadBlob(blob, filename) {
     URL.revokeObjectURL(url);
   }, 0);
 }
+
+// Test hooks (tests/*.mjs): the pieces of fuzzy search, for timing them apart.
+window.__sdGetIndex = getIndex;
+window.__sdFuzzyCandidates = fuzzyCandidates;
+window.__sdSearchIndex = async (name, q, opts) => { window.__sdLast = await searchIndex(name, q, opts); return window.__sdLast; };

@@ -159,6 +159,7 @@ function common(i, r) {
     id: r.SD_ID, idx: String(i), src: r.source || '',
     p, od: trunc(r.original_date || r.DN_dato || r.RN_dato || '', 60),
     ds: ordToIso(ds), de: ordToIso(de),
+    c: String(score),   // completeness, so fuzzy result merging can keep that sort order
   };
   for (const [mk, rk] of [['d', 'DN_REF'], ['r', 'RN_REF'], ['sdhk', 'SDHK_REF'], ['dd', 'DD_REF'], ['df', 'DF_REF']]) {
     if (r[rk]) meta[mk] = r[rk];
@@ -174,6 +175,12 @@ function common(i, r) {
   const filters = { source: (r.source || 'ukjent').split('+') };
   if (years.length) filters.year = years;
   return { url: `/sok/?id=${r.SD_ID}`, meta, sort, filters, p };
+}
+
+// Bucket name for a word's first letter: a-z as is, anything else (æ ø å ä ö
+// þ ð …) as its code point in hex, so the file names stay ASCII.
+function vocabLetter(ch) {
+  return /^[a-z]$/.test(ch) ? ch : `u${ch.codePointAt(0).toString(16)}`;
 }
 
 async function main() {
@@ -281,6 +288,43 @@ async function main() {
     }
     flush();
     console.log(`[full] done: ${total} records in ${chunkNo} chunks`);
+  }
+
+  // 6. Vocabulary for fuzzy search: every word (3+ letters) of the summaries,
+  //    letter texts and place names with its frequency, bucketed by first
+  //    letter and length so the browser fetches only the buckets a query word
+  //    can be within edit distance of (assets/js/search-v3.js, fuzzyCandidates).
+  //    Files: vocab/<letter>/<len>.json = [[word, count], ...] by count desc;
+  //    vocab/index.json = { "<letter>": [lengths...] }.
+  if (wants('vocab')) {
+    const counts = new Map();
+    const re = /\p{L}{3,}/gu;
+    for (const [, r] of loadLetters()) {
+      for (const field of ['sammendrag', 'regest', 'brevtekst', 'Normalized_name', 'DN_sted', 'RN_sted', 'DD_sted', 'SDHK_sted', 'DF_sted']) {
+        const t = r[field];
+        if (!t || t === '[No_loc]') continue;
+        for (const m of t.toLowerCase().matchAll(re)) counts.set(m[0], (counts.get(m[0]) || 0) + 1);
+      }
+    }
+    const VOCAB_DIR = path.join(OUT_DIR, 'vocab');
+    fs.rmSync(VOCAB_DIR, { recursive: true, force: true });
+    const buckets = new Map();
+    for (const [w, n] of counts) {
+      const key = `${vocabLetter(w[0])}/${Math.min(w.length, 24)}`;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push([w, n]);
+    }
+    const index = {};
+    for (const [key, words] of buckets) {
+      words.sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
+      const [letter, len] = key.split('/');
+      fs.mkdirSync(path.join(VOCAB_DIR, letter), { recursive: true });
+      fs.writeFileSync(path.join(VOCAB_DIR, letter, `${len}.json`), JSON.stringify(words));
+      (index[letter] ||= []).push(Number(len));
+    }
+    for (const k of Object.keys(index)) index[k].sort((a, b) => a - b);
+    fs.writeFileSync(path.join(VOCAB_DIR, 'index.json'), JSON.stringify(index));
+    console.log(`[vocab] done: ${counts.size} words in ${buckets.size} buckets`);
   }
 
   await pagefind.close();

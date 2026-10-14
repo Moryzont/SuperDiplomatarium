@@ -102,7 +102,7 @@ async function main() {
     check('finds results in range', r.count > 0, `count=${r.count}`);
     // Overlap semantics: each result's [ds, de] range must intersect [1300, 1350]
     const ranges = await page.evaluate(async () => {
-      const handles = window.__SD_STATE.currentResults.slice(0, 20);
+      const handles = await window.__SD_STATE.currentResults.get(0, 20);
       const letters = await Promise.all(handles.map(h => h.resolve()));
       return letters.map(l => [l.ds, l.de]);
     });
@@ -160,7 +160,7 @@ async function main() {
     console.log('\n[text normalization: DD mojibake repaired]');
     r = await runSearch(page, { query: 'SD50007869', field: 'id' });
     const ddText = await page.evaluate(async () => {
-      const l = await window.__SD_STATE.currentResults[0].resolve();
+      const l = await (await window.__SD_STATE.currentResults.get(0, 1))[0].resolve();
       const full = window.__SD_STATE.fullDataCache.get(l.i);
       return (full?.sammendrag || '') + (full?.brevtekst || '');
     });
@@ -226,7 +226,7 @@ async function main() {
     r = await runSearch(page, { query: 'SDHK 30000', field: 'id' });
     check('SDHK 30000 found', r.count === 1, `count=${r.count}`);
     const alignment = await page.evaluate(async () => {
-      const h = window.__SD_STATE.currentResults[0];
+      const h = (await window.__SD_STATE.currentResults.get(0, 1))[0];
       const letter = await h.resolve();
       const full = window.__SD_STATE.fullDataCache.get(letter.i);
       return { cardId: letter.id, fullId: full?.SD_ID, idx: letter.i };
@@ -248,7 +248,7 @@ async function main() {
     // Compare the actual date_start sort values, not the display string
     // (display prefers the original date text, which can be a range).
     const dd = await page.evaluate(async () => {
-      const letters = await Promise.all(window.__SD_STATE.currentResults.slice(0, 20).map(h => h.resolve()));
+      const letters = await Promise.all((await window.__SD_STATE.currentResults.get(0, 20)).map(h => h.resolve()));
       return letters.map(l => l.ds).filter(Boolean);
     });
     check('sorted desc', dd.length > 3 && dd.every((d, i) => i === 0 || d <= dd[i - 1]), JSON.stringify(dd));
