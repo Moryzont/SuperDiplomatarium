@@ -2125,6 +2125,9 @@ mark {
 }
 
 .nevnt-chip { display: inline-block; padding: .05rem .5rem; margin: .1rem; border: 1px solid var(--c-olive); border-radius: 999px; font-size: .85rem; }
+.nevnt-chip.nevnt-emne { border-style: dashed; opacity: .85; }
+.nevnt-emner summary { cursor: pointer; }
+.nevnt-emner[open] summary { margin-bottom: .25rem; }
 .nevnt-uplassert { opacity: .55; border-style: dashed; }
 
 /* ---------- Phones: search options (last, so it wins over the tablet rules above) ---------- */

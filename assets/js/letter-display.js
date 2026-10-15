@@ -616,16 +616,29 @@ function renderLetterDetails(full) {
     continuation += `<div class="detail-section"><em>Noter:</em> ${escapeHtml(full.noter)}</div>`;
   }
 
-  // People and places mentioned in the letter (tagged in the curation tool)
+  // People and places mentioned in the letter (tagged in the curation tool
+  // or seeded from the edition's own register); the register's subject
+  // headings go on their own line, folded when there are many.
   if (Array.isArray(full.nevnte) && full.nevnte.length > 0) {
-    const chips = full.nevnte.map((m) => {
-      const icon = m.kind === 'person' ? '●' : m.region ? '▦' : '⌖';
+    const chip = (m) => {
+      const icon = m.kind === 'person' ? '●' : m.kind === 'subject' ? '◆' : m.region ? '▦' : '⌖';
       const label = escapeHtml(m.name || m.text);
+      if (m.kind === 'subject') return `<span class="nevnt-chip nevnt-emne">${icon} ${label}</span>`;
       return (m.lat != null && m.lon != null)
         ? `<span class="nevnt-chip" title="${m.lat}, ${m.lon}">${icon} ${label}</span>`
         : `<span class="nevnt-chip nevnt-uplassert" title="${LT('letter.notPlaced')}">${icon} ${label}</span>`;
-    }).join(' ');
-    continuation += `<div class="detail-section"><em>${LT('letter.mentions')}</em> ${chips}</div>`;
+    };
+    const named = full.nevnte.filter(m => m.kind !== 'subject');
+    const subjects = full.nevnte.filter(m => m.kind === 'subject');
+    if (named.length) {
+      continuation += `<div class="detail-section"><em>${LT('letter.mentions')}</em> ${named.map(chip).join(' ')}</div>`;
+    }
+    if (subjects.length) {
+      const chips = subjects.map(chip).join(' ');
+      continuation += subjects.length > 12
+        ? `<div class="detail-section"><details class="nevnt-emner"><summary><em>${LT('letter.subjects')}</em> ${subjects.length}</summary>${chips}</details></div>`
+        : `<div class="detail-section"><em>${LT('letter.subjects')}</em> ${chips}</div>`;
+    }
   }
 
   // Add tillegg if present
