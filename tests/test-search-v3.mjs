@@ -147,6 +147,23 @@ async function main() {
     r = await runSearch(page, { query: 'SDHK 1234', field: 'id' });
     check('SDHK id found', r.count >= 1, `count=${r.count}`);
 
+    console.log('\n[DI: Diplomatarium Islandicum (tier 3, from scans)]');
+    r = await runSearch(page, { query: 'DI II nr. 154', field: 'id' });
+    check('DI II nr. 154 found once', r.count === 1, `count=${r.count}`);
+    check('DI II nr. 154 is SD80000000', r.cards[0]?.id === 'SD80000000', r.cards[0]?.id);
+    check('DI badge on the card', r.cards[0]?.badges.some(b => /^DI$/.test(b.trim())), JSON.stringify(r.cards[0]?.badges));
+    r = await runSearch(page, { query: 'DI I Viðbætir nr. 3', field: 'id' });
+    check('DI I Viðbætir nr. 3 found once', r.count === 1 && r.cards[0]?.id === 'SD80000691', `count=${r.count} id=${r.cards[0]?.id}`);
+    r = await runSearch(page, { query: 'DI02_00001', field: 'id' });
+    check('raw DI id found', r.count === 1, `count=${r.count}`);
+    r = await runSearch(page, { query: 'biskup', field: 'text', sources: ['DI'] });
+    const allDi = r.cards.every(c => c.badges.some(b => /^DI$/.test(b.trim())));
+    check('DI-only filter respected', r.count > 0 && allDi, `count=${r.count}`);
+    await page.click('.letter-card .toggle-details');
+    await sleep(2500);
+    const diFooter = await page.$eval('.letter-card .letter-footer', el => el.textContent).catch(() => '');
+    check('DI detail shows the source apparatus', /DI:/.test(diFooter), diFooter.slice(0, 80));
+
     console.log('\n[detail expansion]');
     r = await runSearch(page, { query: 'jordegods', field: 'text' });
     await page.click('.letter-card .toggle-details');
