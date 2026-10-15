@@ -13,7 +13,7 @@ let seq = 0; // internal ids used for list toggles
 // Source badge colors
 // the same badge colours as the search page (search-v3.js)
 const SOURCE_COLORS = {
-  DN: '#5c6d4a', RN: '#6b8e7a', SDHK: '#8b7355', DD: '#8b5a5a', DF: '#5a7a6b'
+  DN: '#5c6d4a', RN: '#6b8e7a', SDHK: '#8b7355', DD: '#8b5a5a', DF: '#5a7a6b', DI: '#6a6e8c'
 };
 
 // one pin for every letter: a small olive dot in the site's palette (CSS .sd-pin)
@@ -83,7 +83,8 @@ async function loadLettersForMap() {
         i: rec[0], la: rec[1], lo: rec[2], id: rec[3],
         d: rec[4] || null, r: rec[5] || null, sdhk: rec[6] || null,
         dd: rec[7] || null, df: rec[8] || null, src: rec[9] || '',
-        ds: rec[10] || '', de: rec[11] || '', od: rec[12] || '', p: rec[13] || ''
+        ds: rec[10] || '', de: rec[11] || '', od: rec[12] || '', p: rec[13] || '',
+        di: rec[14] || null
       };
       lettersData.push(letter);
 
@@ -219,6 +220,7 @@ function renderSourceBadges(letter) {
   if (letter.sdhk) sources.push('SDHK');
   if (letter.dd) sources.push('DD');
   if (letter.df) sources.push('DF');
+  if (letter.di) sources.push('DI');
   if (letter.src && !sources.includes(letter.src)) sources.push(letter.src);
 
   if (sources.length === 0) {
@@ -239,6 +241,7 @@ function renderReferencesLine(letter) {
   if (letter.sdhk) refs.push(formatRef(letter.sdhk, 'SDHK'));
   if (letter.dd) refs.push(formatRef(letter.dd, 'DD'));
   if (letter.df) refs.push(formatRef(letter.df, 'DF'));
+  if (letter.di) refs.push(formatRef(letter.di, 'DI'));
 
   return refs.filter(Boolean).join(' | ');
 }
@@ -248,6 +251,13 @@ function formatRef(ref, sourceKey) {
   if (!ref) return null;
   const refStr = String(ref);
 
+  if (sourceKey === 'DI') {
+    const m = refStr.match(/^DI(\d{2})_(\d{5})$/i);
+    if (m) {
+      const vol = toRoman(parseInt(m[1], 10)), n = parseInt(m[2], 10);
+      return n >= 1000 ? `DI ${vol} Viðbætir nr. ${n - 1000}` : `DI ${vol} nr. ${n}`;
+    }
+  }
   if (sourceKey === 'DN') {
     // Format: DN + 2-digit vol + 6-digit num (e.g., DN12000328 = DN XII, 328)
     const m = refStr.match(/^DN(\d{2})(\d{6})$/i);
@@ -537,6 +547,7 @@ function toTXT_likeDetails(rows) {
     if (l.sdhk) sources.push(`SDHK: ${l.sdhk}`);
     if (l.dd) sources.push(`DD: ${l.dd}`);
     if (l.df) sources.push(`DF: ${l.df}`);
+    if (l.di) sources.push(`DI: ${l.di}`);
 
     const refs = renderReferencesLine(l) || 'Uten referanse';
     const dateLine = formatDateRange(l.ds, l.de, l.od);
@@ -570,7 +581,7 @@ function toTXT_likeDetails(rows) {
 function toCSV_fromRaw(rows) {
   // Define headers based on search data format
   const headers = [
-    'SD_ID', 'DN_REF', 'RN_REF', 'SDHK_REF', 'DD_REF', 'DF_REF',
+    'SD_ID', 'DN_REF', 'RN_REF', 'SDHK_REF', 'DD_REF', 'DF_REF', 'DI_REF',
     'source', 'date', 'date_start', 'date_end', 'original_date',
     'place', 'lat', 'lon', 'summary'
   ];
@@ -589,6 +600,7 @@ function toCSV_fromRaw(rows) {
       esc(l.sdhk),
       esc(l.dd),
       esc(l.df),
+      esc(l.di),
       esc(l.src),
       esc(formatDateRange(l.ds, l.de, l.od)),
       esc(l.ds),

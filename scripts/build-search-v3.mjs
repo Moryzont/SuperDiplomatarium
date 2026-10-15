@@ -88,13 +88,13 @@ function completeness(r, ds, p) {
   if (Number.isFinite(r.lat) && Number.isFinite(r.lon)) score += 15;
   const s = r.sammendrag || r.regest || '';
   score += s.length > 50 ? 15 : (s ? 5 : 0);
-  for (const k of ['DN_REF', 'RN_REF', 'SDHK_REF', 'DD_REF', 'DF_REF']) if (r[k]) score += 5;
+  for (const k of ['DN_REF', 'RN_REF', 'SDHK_REF', 'DD_REF', 'DF_REF', 'DI_REF']) if (r[k]) score += 5;
   return score;
 }
 
 function placeOf(r) {
   const p = r.Normalized_name && r.Normalized_name !== '[No_loc]' ? r.Normalized_name : '';
-  return p || r.DN_sted || r.RN_sted || r.DD_sted || r.SDHK_sted || r.DF_sted || '';
+  return p || r.DN_sted || r.RN_sted || r.DD_sted || r.SDHK_sted || r.DF_sted || r.DI_sted || '';
 }
 
 const trunc = (s, n) => (s && s.length > n ? s.slice(0, n) : s || '');
@@ -161,7 +161,7 @@ function common(i, r) {
     ds: ordToIso(ds), de: ordToIso(de),
     c: String(score),   // completeness, so fuzzy result merging can keep that sort order
   };
-  for (const [mk, rk] of [['d', 'DN_REF'], ['r', 'RN_REF'], ['sdhk', 'SDHK_REF'], ['dd', 'DD_REF'], ['df', 'DF_REF']]) {
+  for (const [mk, rk] of [['d', 'DN_REF'], ['r', 'RN_REF'], ['sdhk', 'SDHK_REF'], ['dd', 'DD_REF'], ['df', 'DF_REF'], ['di', 'DI_REF']]) {
     if (r[rk]) meta[mk] = r[rk];
   }
   if (r.related_sd_ids?.length) meta.rel = JSON.stringify(r.related_sd_ids);
@@ -205,7 +205,7 @@ async function main() {
 
   // 3. Place index: place names only.
   if (wants('place')) await buildIndex('pagefind-place', (i, r) => {
-    const places = [...new Set([r.Normalized_name, r.DN_sted, r.RN_sted, r.DD_sted, r.SDHK_sted, r.DF_sted]
+    const places = [...new Set([r.Normalized_name, r.DN_sted, r.RN_sted, r.DD_sted, r.SDHK_sted, r.DF_sted, r.DI_sted]
       .filter(v => v && v !== '[No_loc]'))];
     if (!places.length) return null;
     const c = common(i, r);
@@ -216,7 +216,7 @@ async function main() {
   }, 'la');
 
   // 4. Core table: compact arrays, position = global index (matches full-XX.json chunks).
-  //    Fields: [SD_ID, DN, RN, SDHK, DD, DF, src, ds, de, rel]
+  //    Fields: [SD_ID, DN, RN, SDHK, DD, DF, src, ds, de, rel, DI]   (DI appended last, 2026-10-15, so older offsets hold)
   if (wants('core')) {
     const core = [];
     for (const [, r] of loadLetters()) {
@@ -224,6 +224,7 @@ async function main() {
       core.push([
         r.SD_ID, r.DN_REF || 0, r.RN_REF || 0, r.SDHK_REF || 0, r.DD_REF || 0, r.DF_REF || 0,
         r.source || 0, ds, de, r.related_sd_ids?.length ? r.related_sd_ids : 0,
+        r.DI_REF || 0,
       ]);
     }
     const coreOut = {
@@ -231,7 +232,7 @@ async function main() {
       generated: new Date().toISOString(),
       full_chunk_size: 100,
       n: core.length,
-      fields: ['id', 'd', 'r', 'sdhk', 'dd', 'df', 'src', 'ds', 'de', 'rel'],
+      fields: ['id', 'd', 'r', 'sdhk', 'dd', 'df', 'src', 'ds', 'de', 'rel', 'di'],
       records: core,
     };
     fs.writeFileSync(path.join(OUT_DIR, 'core.json'), JSON.stringify(coreOut));
@@ -240,7 +241,7 @@ async function main() {
 
   // 5. Map table: letters with coordinates, just enough for markers and list cards.
   //    Summaries/fulltext load on demand from full-XX.json (popup open / detail toggle).
-  //    Fields: [idx, lat, lon, SD_ID, DN, RN, SDHK, DD, DF, src, ds_iso, de_iso, od, place]
+  //    Fields: [idx, lat, lon, SD_ID, DN, RN, SDHK, DD, DF, src, ds_iso, de_iso, od, place, DI]
   if (wants('map')) {
     const rows = [];
     for (const [i, r] of loadLetters()) {
@@ -251,6 +252,7 @@ async function main() {
         r.SD_ID, r.DN_REF || 0, r.RN_REF || 0, r.SDHK_REF || 0, r.DD_REF || 0, r.DF_REF || 0,
         r.source || 0, ordToIso(ds) || 0, ordToIso(de) || 0,
         trunc(r.original_date || r.DN_dato || r.RN_dato || '', 60) || 0, placeOf(r) || 0,
+        r.DI_REF || 0,
       ]);
     }
     const mapOut = {
@@ -258,7 +260,7 @@ async function main() {
       generated: new Date().toISOString(),
       full_chunk_size: 100,
       n: rows.length,
-      fields: ['idx', 'la', 'lo', 'id', 'd', 'r', 'sdhk', 'dd', 'df', 'src', 'ds', 'de', 'od', 'p'],
+      fields: ['idx', 'la', 'lo', 'id', 'd', 'r', 'sdhk', 'dd', 'df', 'src', 'ds', 'de', 'od', 'p', 'di'],
       records: rows,
     };
     fs.writeFileSync(path.join(OUT_DIR, 'map.json'), JSON.stringify(mapOut));
@@ -300,7 +302,7 @@ async function main() {
     const counts = new Map();
     const re = /\p{L}{3,}/gu;
     for (const [, r] of loadLetters()) {
-      for (const field of ['sammendrag', 'regest', 'brevtekst', 'Normalized_name', 'DN_sted', 'RN_sted', 'DD_sted', 'SDHK_sted', 'DF_sted']) {
+      for (const field of ['sammendrag', 'regest', 'brevtekst', 'Normalized_name', 'DN_sted', 'RN_sted', 'DD_sted', 'SDHK_sted', 'DF_sted', 'DI_sted']) {
         const t = r[field];
         if (!t || t === '[No_loc]') continue;
         for (const m of t.toLowerCase().matchAll(re)) counts.set(m[0], (counts.get(m[0]) || 0) + 1);

@@ -45,7 +45,7 @@ const STATE = {
 };
 
 // Core record column offsets
-const C = { id: 0, d: 1, r: 2, sdhk: 3, dd: 4, df: 5, src: 6, ds: 7, de: 8, rel: 9 };
+const C = { id: 0, d: 1, r: 2, sdhk: 3, dd: 4, df: 5, src: 6, ds: 7, de: 8, rel: 9, di: 10 };
 
 // Test/debug hook
 window.__SD_STATE = STATE;
@@ -195,6 +195,7 @@ function coreLetter(idx) {
     sdhk: rec[C.sdhk] || null,
     dd: rec[C.dd] || null,
     df: rec[C.df] || null,
+    di: rec[C.di] || null,
     src: rec[C.src] || '',
     ds: rec[C.ds] || 0,   // ordinal int (YYYYMMDD) or 0
     de: rec[C.de] || 0,
@@ -297,7 +298,7 @@ function makeCoreHandle(idx) {
         de: full.date_end || ordToIso(cl.de),
         od: full.original_date || full.DN_dato || full.RN_dato || '',
         p: full.Normalized_name && full.Normalized_name !== '[No_loc]' ? full.Normalized_name
-          : (full.DN_sted || full.RN_sted || full.DD_sted || full.SDHK_sted || full.DF_sted || ''),
+          : (full.DN_sted || full.RN_sted || full.DD_sted || full.SDHK_sted || full.DF_sted || full.DI_sted || ''),
         s: (full.sammendrag || full.regest || '').slice(0, 300),
         fotnoter: full.fotnoter || '',
         query: STATE.currentQuery
@@ -343,6 +344,15 @@ function parseIdQuery(query) {
     return { type: 'id', source, id: `RN${String(vol).padStart(3, '0')}_${String(num).padStart(5, '0')}` };
   }
 
+  // DI II nr. 154 / DI II 154 / DI I Viðbætir nr. 3 / DI02_00154
+  const diMatch = q.match(/^DI\s+([IVXLCDM]+)\s+(Viðb\S*\s+)?(?:nr\.?\s*)?(\d+)$/i);
+  if (diMatch) {
+    const vol = romanToInt(diMatch[1]);
+    const num = parseInt(diMatch[3], 10) + (diMatch[2] ? 1000 : 0);
+    return { type: 'id', source: 'DI', id: `DI${String(vol).padStart(2, '0')}_${String(num).padStart(5, '0')}` };
+  }
+  if (/^DI\d{2}_\d{5}$/i.test(q)) return { type: 'id', source: 'DI', id: q.toUpperCase() };
+
   const sdhkMatch = q.match(/^SDHK[_\s-]*(\d+)$/i);
   if (sdhkMatch) {
     return { type: 'id', source: 'SDHK', id: `SDHK_${sdhkMatch[1].padStart(5, '0')}` };
@@ -371,7 +381,8 @@ function getSelectedDatabases() {
     RN: document.getElementById('filter-rn')?.checked ?? true,
     DD: document.getElementById('filter-dd')?.checked ?? true,
     SDHK: document.getElementById('filter-sdhk')?.checked ?? true,
-    DF: document.getElementById('filter-df')?.checked ?? true
+    DF: document.getElementById('filter-df')?.checked ?? true,
+    DI: document.getElementById('filter-di')?.checked ?? true
   };
 }
 
@@ -380,7 +391,7 @@ function buildPfOptions() {
   const filters = {};
   const dbs = getSelectedDatabases();
   const enabled = Object.keys(dbs).filter(k => dbs[k]);
-  if (enabled.length < 5) filters.source = { any: enabled.length ? enabled : ['__none__'] };
+  if (enabled.length < Object.keys(dbs).length) filters.source = { any: enabled.length ? enabled : ['__none__'] };
 
   const { fromYear, toYear } = readUIYearRange();
   if (fromYear != null || toYear != null) {
@@ -670,9 +681,10 @@ async function coreIdSearch(rawQuery) {
         found = have && (have === want || parseInt(have, 10) === parseInt(want, 10));
       } else if (parsed.source === 'DD') found = String(rec[C.dd] || '').toUpperCase() === sid;
       else if (parsed.source === 'DF') found = String(rec[C.df] || '').toUpperCase() === sid;
+      else if (parsed.source === 'DI') found = String(rec[C.di] || '').toUpperCase() === sid;
     } else {
       // Generic substring over all ID fields
-      for (const col of [C.id, C.d, C.r, C.sdhk, C.dd, C.df]) {
+      for (const col of [C.id, C.d, C.r, C.sdhk, C.dd, C.df, C.di]) {
         const v = rec[col];
         if (v && String(v).toUpperCase().includes(q)) { found = true; break; }
       }
@@ -869,9 +881,20 @@ function formatDdRef(refStr) {
   return refStr;
 }
 
+
+// DI ids: DI<vol 2 digits>_<nr 5 digits> (collections/di); the supplement of a
+// volume is numbered 1001, 1002, … -> "DI I Viðbætir nr. 1".
+function formatDiRef(refStr) {
+  const m = refStr.match(/^DI(\d{2})_(\d{5})$/i);
+  if (!m) return refStr;
+  const vol = toRoman(parseInt(m[1], 10)), n = parseInt(m[2], 10);
+  return n >= 1000 ? `DI ${vol} Viðbætir nr. ${n - 1000}` : `DI ${vol} nr. ${n}`;
+}
+
 function formatRef(ref, sourceKey) {
   if (!ref) return null;
   const refStr = String(ref);
+  if (sourceKey === 'DI') return formatDiRef(refStr);
   if (sourceKey === 'DN') {
     const m = refStr.match(/^DN(\d{2})(\d{6})$/i);
     if (m) return `DN ${toRoman(parseInt(m[1], 10))}, ${parseInt(m[2], 10)}`;
@@ -904,7 +927,7 @@ function renderReferencesLine(letter) {
 }
 
 const SOURCE_COLORS = {
-  DN: '#5c6d4a', RN: '#6b8e7a', SDHK: '#8b7355', DD: '#8b5a5a', DF: '#5a7a6b'
+  DN: '#5c6d4a', RN: '#6b8e7a', SDHK: '#8b7355', DD: '#8b5a5a', DF: '#5a7a6b', DI: '#6a6e8c'
 };
 
 function renderSourceBadges(letter) {
@@ -945,6 +968,7 @@ function renderSourceBadges(letter) {
   if (letter.sdhk) sources.push('SDHK');
   if (letter.dd) sources.push('DD');
   if (letter.df) sources.push('DF');
+  if (letter.di) sources.push('DI');
   if (!sources.length && letter.src) {
     for (const part of letter.src.split('+')) if (!sources.includes(part)) sources.push(part);
   }
@@ -1097,7 +1121,7 @@ async function loadAndShowDetails(idx, showingSourceIdx = null) {
     contEl.innerHTML = rest ? ' ' + escapeHtml(rest) : '';
     contEl.style.display = 'inline';
   }
-  const sources = [full.RN_source, full.DN_source, full.DD_source, full.SDHK_source, full.DF_source].filter(Boolean);
+  const sources = [full.RN_source, full.DN_source, full.DD_source, full.SDHK_source, full.DF_source, full.DI_source].filter(Boolean);
   if (footerEl && sources.length) {
     footerEl.innerHTML = `<span class="letter-kilde"><em>Kilde:</em> ${escapeHtml(sources.join(' | '))}</span>`;
     footerEl.style.display = 'block';
@@ -1248,7 +1272,7 @@ function wireListeners() {
     performSearch();
   });
 
-  for (const filterId of ['filter-dn', 'filter-rn', 'filter-dd', 'filter-sdhk', 'filter-df']) {
+  for (const filterId of ['filter-dn', 'filter-rn', 'filter-dd', 'filter-sdhk', 'filter-df', 'filter-di']) {
     document.getElementById(filterId)?.addEventListener('change', debounced);
   }
 }
@@ -1342,6 +1366,10 @@ function normalizeCrossRef(ref, source) {
   if (source === 'DF' || ref.startsWith('DF')) {
     const m = ref.match(/^DF[_-]?(\d+)$/i);
     if (m) return `DF_${parseInt(m[1], 10)}`;
+  }
+  if (source === 'DI' || ref.startsWith('DI')) {
+    const m = ref.match(/^DI[_-]?(\d+)[_-](\d+)$/i);
+    if (m) return `DI${String(parseInt(m[1], 10)).padStart(2, '0')}_${String(parseInt(m[2], 10)).padStart(5, '0')}`;
   }
   return ref;
 }

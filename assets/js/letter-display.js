@@ -39,6 +39,12 @@ const SOURCES = {
     short: 'DF',
     color: '#5a7a6b',  // Muted teal-green
     country: 'Finland'
+  },
+  DI: {
+    name: 'Diplomatarium Islandicum',
+    short: 'DI',
+    color: '#6a6e8c',  // Muted slate-violet
+    country: 'Island'
   }
 };
 
@@ -55,6 +61,7 @@ function getLetterSources(letter) {
   if (letter.sdhk) sources.push({ key: 'SDHK', ref: letter.sdhk });
   if (letter.dd) sources.push({ key: 'DD', ref: letter.dd });
   if (letter.df) sources.push({ key: 'DF', ref: letter.df });
+  if (letter.di) sources.push({ key: 'DI', ref: letter.di });
 
   // Full format uses full keys
   if (letter.DN_REF) sources.push({ key: 'DN', ref: letter.DN_REF });
@@ -62,6 +69,7 @@ function getLetterSources(letter) {
   if (letter.SDHK_REF) sources.push({ key: 'SDHK', ref: letter.SDHK_REF });
   if (letter.DD_REF) sources.push({ key: 'DD', ref: letter.DD_REF });
   if (letter.DF_REF) sources.push({ key: 'DF', ref: letter.DF_REF });
+  if (letter.DI_REF) sources.push({ key: 'DI', ref: letter.DI_REF });
 
   // Also check src/source field for primary source
   const primarySrc = letter.src || letter.source;
@@ -155,6 +163,15 @@ function formatReference(ref, sourceKey) {
     }
   }
 
+  // DI: DI<vol 2 digits>_<nr 5 digits>; a supplement entry is numbered 1001, 1002, …
+  if (sourceKey === 'DI') {
+    const m = refStr.match(/^DI(\d{2})_(\d{5})$/i);
+    if (m) {
+      const vol = toRoman(parseInt(m[1], 10)), n = parseInt(m[2], 10);
+      return n >= 1000 ? `DI ${vol} Viðbætir nr. ${n - 1000}` : `DI ${vol} nr. ${n}`;
+    }
+  }
+
   // Fallback: return as-is
   return refStr;
 }
@@ -236,6 +253,7 @@ function getPlaceName(letter) {
          letter.SDHK_sted ||
          letter.DD_sted ||
          letter.DF_sted ||
+         letter.DI_sted ||
          null;
   // Editorial uncertainty: dashed convention is a trailing '?'
   if (place && letter.uncertain_loc && !String(place).trim().endsWith('?')) {
@@ -478,6 +496,7 @@ function renderLetterDetails(full) {
   const ddSource = full.DD_source?.trim() || '';
   const sdhkSource = full.SDHK_source?.trim() || '';
   const dfSource = full.DF_source?.trim() || '';
+  const diSource = full.DI_source?.trim() || '';
 
   // Determine what to use as main text
   let usedFallback = null;
@@ -495,6 +514,9 @@ function renderLetterDetails(full) {
   } else if (!fullSammendrag && dfSource) {
     fullSammendrag = dfSource;
     usedFallback = 'DF_source';
+  } else if (!fullSammendrag && diSource) {
+    fullSammendrag = diSource;
+    usedFallback = 'DI_source';
   }
 
   // === META EXPANSION (only show if there's additional info beyond main display) ===
@@ -509,6 +531,7 @@ function renderLetterDetails(full) {
   if (full.DD_sted) sourcePlaces.push({ src: 'DD', val: full.DD_sted });
   if (full.SDHK_sted) sourcePlaces.push({ src: 'SDHK', val: full.SDHK_sted });
   if (full.DF_sted) sourcePlaces.push({ src: 'DF', val: full.DF_sted });
+  if (full.DI_sted) sourcePlaces.push({ src: 'DI', val: full.DI_sted });
 
   // One clean header line. The place itself becomes the map link (the
   // caller applies mapHref to the existing place element — no extra text);
@@ -626,6 +649,7 @@ function renderLetterDetails(full) {
   if (ddSource && usedFallback !== 'DD_source') sources.push(`<div class="source-item"><span class="source-label">DD:</span> ${escapeHtml(ddSource)}</div>`);
   if (sdhkSource && usedFallback !== 'SDHK_source') sources.push(`<div class="source-item"><span class="source-label">SDHK:</span> ${escapeHtml(sdhkSource)}</div>`);
   if (dfSource && usedFallback !== 'DF_source') sources.push(`<div class="source-item"><span class="source-label">DF:</span> ${escapeHtml(dfSource)}</div>`);
+  if (diSource && usedFallback !== 'DI_source') sources.push(`<div class="source-item"><span class="source-label">DI:</span> ${escapeHtml(diSource)}</div>`);
 
   if (sources.length > 0) {
     footer += `<div class="detail-section"><em>${LT('letter.sources')}</em><div class="source-list">${sources.join('')}</div></div>`;

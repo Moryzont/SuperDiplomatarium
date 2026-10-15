@@ -33,7 +33,7 @@ async function runSearch(page, { query = '', field = null, from = '', to = '', s
     document.getElementById('search-input').value = '';
     document.getElementById('date-from').value = '';
     document.getElementById('date-to').value = '';
-    for (const id of ['filter-dn', 'filter-rn', 'filter-dd', 'filter-sdhk', 'filter-df']) {
+    for (const id of ['filter-dn', 'filter-rn', 'filter-dd', 'filter-sdhk', 'filter-df', 'filter-di']) {
       document.getElementById(id).checked = true;
     }
   });
@@ -43,7 +43,7 @@ async function runSearch(page, { query = '', field = null, from = '', to = '', s
   if (to) await page.evaluate(v => { document.getElementById('date-to').value = v; }, to);
   if (sources) {
     await page.evaluate(srcs => {
-      for (const id of ['filter-dn', 'filter-rn', 'filter-dd', 'filter-sdhk', 'filter-df']) {
+      for (const id of ['filter-dn', 'filter-rn', 'filter-dd', 'filter-sdhk', 'filter-df', 'filter-di']) {
         document.getElementById(id).checked = srcs.includes(id.replace('filter-', '').toUpperCase());
       }
     }, sources);
