@@ -11,9 +11,13 @@ let currentSelection = []; // what gets exported
 let seq = 0; // internal ids used for list toggles
 
 // Source badge colors
+// the same badge colours as the search page (search-v3.js)
 const SOURCE_COLORS = {
-  DN: '#2563eb', RN: '#0891b2', SDHK: '#ca8a04', DD: '#dc2626', DF: '#16a34a'
+  DN: '#5c6d4a', RN: '#6b8e7a', SDHK: '#8b7355', DD: '#8b5a5a', DF: '#5a7a6b'
 };
+
+// one pin for every letter: a small olive dot in the site's palette (CSS .sd-pin)
+const PIN_ICON = () => L.divIcon({ className: 'sd-pin', iconSize: [14, 14], iconAnchor: [7, 7], popupAnchor: [0, -8] });
 
 document.addEventListener('DOMContentLoaded', async () => {
   initializeMap();
@@ -40,7 +44,11 @@ function initializeMap() {
   const hasDraw = L && L.Control && typeof L.Control.Draw === 'function';
   if (hasDraw) {
     const drawControl = new L.Control.Draw({
-      draw: { polygon: true, rectangle: true, circle: false, marker: false, polyline: false },
+      draw: {
+        polygon: { shapeOptions: { color: '#BC6C25', weight: 2, fillColor: '#DDA15E', fillOpacity: .12 } },
+        rectangle: { shapeOptions: { color: '#BC6C25', weight: 2, fillColor: '#DDA15E', fillOpacity: .12 } },
+        circle: false, marker: false, polyline: false
+      },
       edit: { featureGroup: drawnItems }
     });
     map.addControl(drawControl);
@@ -77,7 +85,7 @@ async function loadLettersForMap() {
       };
       lettersData.push(letter);
 
-      const marker = L.marker([letter.la, letter.lo]);
+      const marker = L.marker([letter.la, letter.lo], { icon: PIN_ICON() });
       // popup HTML is built when the popup opens, not for all 63k markers up front
       marker.bindPopup(() => renderMapPopup(letter));
       // Summaries are not in map.json; fetch the full record when a popup opens

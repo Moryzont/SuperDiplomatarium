@@ -2154,3 +2154,37 @@ mark {
   .pagination { gap: .3rem; padding: .5rem 0; }
   .pagination .page-btn, .pagination .page-num { padding: .35rem .5rem; min-width: 34px; font-size: .85rem; }
 }
+
+/* ---------- The map in the site's palette ---------- */
+/* OpenStreetMap tiles tinted toward the parchment palette (no other tile provider needed) */
+.leaflet-tile-pane { filter: sepia(.45) saturate(.7) brightness(1.03) contrast(.95); }
+/* one olive dot per letter */
+.sd-pin { width: 14px; height: 14px; border-radius: 50%; background: var(--c-olive); border: 2px solid var(--c-light); box-shadow: 0 0 0 1.5px var(--c-olive); }
+.sd-pin:hover { background: var(--c-clay); box-shadow: 0 0 0 1.5px var(--c-clay); }
+/* cluster bubbles: olive -> sand -> clay with the count */
+/* (MarkerCluster.Default.css loads after this sheet, hence the .leaflet-container prefix) */
+.leaflet-container .marker-cluster { background-clip: padding-box; border-radius: 50%; }
+.leaflet-container .marker-cluster div { width: 30px; height: 30px; margin: 5px; border-radius: 50%; text-align: center; font: 600 12px/30px "Inter", system-ui, sans-serif; color: var(--c-light); }
+.leaflet-container .marker-cluster-small { background: rgba(96, 108, 56, .35); }
+.leaflet-container .marker-cluster-small div { background: var(--c-olive); }
+.leaflet-container .marker-cluster-medium { background: rgba(221, 161, 94, .45); }
+.leaflet-container .marker-cluster-medium div { background: var(--c-sand); color: var(--c-dark); }
+.leaflet-container .marker-cluster-large { background: rgba(188, 108, 37, .4); }
+.leaflet-container .marker-cluster-large div { background: var(--c-clay); }
+/* zoom and drawing controls like the secondary buttons */
+.leaflet-bar { border: 2px solid var(--c-olive); border-radius: 8px; box-shadow: none; overflow: hidden; }
+.leaflet-bar a, .leaflet-bar a:hover { background: var(--c-light); color: var(--c-dark); border-bottom: 1px solid var(--c-olive); }
+.leaflet-bar a:hover { background: var(--c-olive); color: var(--c-light); }
+.leaflet-bar a.leaflet-disabled { background: var(--c-light); color: var(--c-olive); opacity: .5; }
+.leaflet-draw-toolbar a { background-color: var(--c-light); }
+.leaflet-draw-toolbar a:hover { background-color: var(--c-olive); }
+.leaflet-draw-actions a { background: var(--c-light); color: var(--c-dark); border: 2px solid var(--c-olive); }
+.leaflet-draw-actions a:hover { background: var(--c-olive); color: var(--c-light); }
+.leaflet-control-attribution { background: rgba(254, 250, 224, .85); color: var(--c-dark); }
+.leaflet-control-attribution a { color: var(--c-olive); }
+/* popups as cards */
+.leaflet-popup-content-wrapper { background: var(--c-light); color: var(--c-dark); border: 2px solid var(--c-olive); border-radius: 12px; box-shadow: none; }
+.leaflet-popup-tip { background: var(--c-light); border: 2px solid var(--c-olive); border-top: 0; border-left: 0; box-shadow: none; }
+.leaflet-container a.leaflet-popup-close-button { color: var(--c-olive); }
+.leaflet-container a.leaflet-popup-close-button:hover { color: var(--c-dark); }
+.leaflet-tooltip { background: var(--c-light); color: var(--c-dark); border: 2px solid var(--c-olive); border-radius: 8px; box-shadow: none; }
