@@ -85,9 +85,9 @@ async function main() {
 
     console.log('\n[init]');
     const initStatus = await waitForStatus(page, /brev klare for søk/);
-    // 106,986 = 23,894 DSL TEI DD documents (was 23,905 scraped; 12 stale
-    // scrape ids dropped, 1 repo-only added) + the other four collections
-    check('core loads', /106986 brev klare/.test(initStatus), `got: ${initStatus}`);
+    // 107,680 = 106,986 (23,894 DSL TEI DD documents + the other four digital
+    // collections) + 694 DI letters (Diplomatarium Islandicum vols. 1–2, from scans, 2026-10-15)
+    check('core loads', /107680 brev klare/.test(initStatus), `got: ${initStatus}`);
 
     console.log('\n[text search: sammendrag]');
     let r = await runSearch(page, { query: 'jordegods', field: 'text' });
