@@ -1,6 +1,6 @@
 {
-  "total_letters": 106986,
-  "chunks": 107,
+  "total_letters": 107680,
+  "chunks": 108,
   "chunk_size": 1000,
   "fields": [
     "SD_ID",
@@ -9,6 +9,7 @@
     "DD_REF",
     "SDHK_REF",
     "DF_REF",
+    "DI_REF",
     "sammendrag",
     "regest",
     "DN_source",
@@ -16,6 +17,7 @@
     "DD_source",
     "SDHK_source",
     "DF_source",
+    "DI_source",
     "DN_dato",
     "RN_dato",
     "date_start",
@@ -26,6 +28,7 @@
     "DD_sted",
     "SDHK_sted",
     "DF_sted",
+    "DI_sted",
     "Normalized_name",
     "lat",
     "lon",
@@ -45,5 +48,5 @@
   ],
   "synced_from": "store",
   "store": "/Users/vetlewisloffsandring/Documents/GitHub/superdiplomatarium-app/data/store/superdiplomatarium.db",
-  "synced_at": "2026-10-15T05:15:38+00:00"
+  "synced_at": "2026-10-15T15:58:12+00:00"
 }
