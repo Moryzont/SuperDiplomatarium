@@ -1003,19 +1003,21 @@ function renderPagination(total) {
   const totalPages = Math.max(1, Math.ceil(total / CONFIG.PAGE_SIZE));
   const cur = STATE.currentPage;
   const pages = [1];
-  for (let i = cur - 2; i <= cur + 2; i++) {
+  const span = window.innerWidth <= 640 ? 1 : 2;   // phones: one neighbour each side, so the row fits
+  for (let i = cur - span; i <= cur + span; i++) {
     if (i > 1 && i < totalPages && !pages.includes(i)) pages.push(i);
   }
   if (totalPages > 1 && !pages.includes(totalPages)) pages.push(totalPages);
 
-  let html = `<button data-page="${cur - 1}" ${cur <= 1 ? 'disabled' : ''}>&laquo;</button>`;
+  // the same secondary button style as the rest of the site; the current page is filled
+  let html = `<button type="button" class="page-btn btn-secondary" data-page="${cur - 1}" ${cur <= 1 ? 'disabled' : ''} aria-label="${TR('page.prev')}" title="${TR('page.prev')}">&laquo;</button>`;
   let prev = 0;
   for (const p of pages) {
     if (p - prev > 1) html += '<span class="page-ellipsis">…</span>';
-    html += `<button data-page="${p}" class="${p === cur ? 'active' : ''}">${p}</button>`;
+    html += `<button type="button" class="page-num btn-secondary${p === cur ? ' active' : ''}" data-page="${p}" ${p === cur ? 'aria-current="page"' : ''}>${p}</button>`;
     prev = p;
   }
-  html += `<button data-page="${cur + 1}" ${cur >= totalPages ? 'disabled' : ''}>&raquo;</button>`;
+  html += `<button type="button" class="page-btn btn-secondary" data-page="${cur + 1}" ${cur >= totalPages ? 'disabled' : ''} aria-label="${TR('page.next')}" title="${TR('page.next')}">&raquo;</button>`;
   bar.innerHTML = html;
   bar.style.display = 'flex';
 }

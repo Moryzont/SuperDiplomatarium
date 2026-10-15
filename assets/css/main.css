@@ -2145,3 +2145,12 @@ mark {
   .fuzzy-label { min-width: 0; }
   .mode-hint { max-width: 100%; margin-top: 0; }
 }
+
+/* ---------- Pagination: secondary buttons, the current page filled ---------- */
+.pagination .page-btn, .pagination .page-num { padding: .4rem .7rem; min-width: 40px; }
+.pagination .page-num.active, .pagination .page-num.active:hover { background: var(--c-clay); border-color: var(--c-clay); color: var(--c-light); cursor: default; }
+.pagination .page-ellipsis { color: var(--c-olive); padding: 0 .15rem; }
+@media (max-width: 640px) {
+  .pagination { gap: .3rem; padding: .5rem 0; }
+  .pagination .page-btn, .pagination .page-num { padding: .35rem .5rem; min-width: 34px; font-size: .85rem; }
+}
