@@ -167,6 +167,14 @@ async function main() {
     check('DI detail shows register mentions', /Nevnte:|Mentioned:/.test(diCont), diCont.slice(0, 80));
     check('DI detail shows subject headings', /Emneord:|Subjects:/.test(diCont), '');
 
+    console.log('\n[RN register mentions]');
+    r = await runSearch(page, { query: 'SD01007880', field: 'id' });
+    check('RN 788 found', r.count === 1, `count=${r.count}`);
+    await page.click('.letter-card .toggle-details');
+    await sleep(2500);
+    const rnCont = await page.$eval('.letter-card .letter-continuation', el => el.textContent).catch(() => '');
+    check('RN detail shows register mentions', /Nevnte:|Mentioned:/.test(rnCont), rnCont.slice(0, 80));
+
     console.log('\n[detail expansion]');
     r = await runSearch(page, { query: 'jordegods', field: 'text' });
     await page.click('.letter-card .toggle-details');
