@@ -323,7 +323,24 @@ function toRoman(num) {
 // properly (ray casting), rectangles by their bounds.
 function handleAreaDrawn(e) {
   drawnItems.addLayer(e.layer);
+  attachRemoveButton(e.layer);
   selectByShapes();
+}
+
+// Click a drawn shape: a small popup with a button that removes just that shape.
+function attachRemoveButton(layer) {
+  layer.bindPopup(() => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn-secondary';
+    btn.textContent = MT('map.removeArea');
+    btn.addEventListener('click', () => {
+      map.closePopup();
+      drawnItems.removeLayer(layer);
+      selectByShapes();
+    });
+    return btn;
+  }, { closeButton: false, className: 'shape-popup' });
 }
 
 function pointInRing(lat, lon, ring) {

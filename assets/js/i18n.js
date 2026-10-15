@@ -138,6 +138,7 @@ const TRANSLATIONS = {
     'map.inAreas': '{n} brev i {k} valgte områder',
     'letter.bodyTitle': 'Brevtekst',
     'letter.noText': 'Ingen tekst tilgjengelig.',
+    'map.removeArea': 'Fjern dette området',
     'lang.switch': 'English',
   },
 
@@ -275,6 +276,7 @@ const TRANSLATIONS = {
     'map.inAreas': '{n} letters in {k} selected areas',
     'letter.bodyTitle': 'Letter text',
     'letter.noText': 'No text available.',
+    'map.removeArea': 'Remove this area',
     'lang.switch': 'Norsk',
   }
 };

@@ -2189,3 +2189,4 @@ mark {
 .leaflet-container a.leaflet-popup-close-button { color: var(--c-olive); }
 .leaflet-container a.leaflet-popup-close-button:hover { color: var(--c-dark); }
 .leaflet-tooltip { background: var(--c-light); color: var(--c-dark); border: 2px solid var(--c-olive); border-radius: 8px; box-shadow: none; }
+.shape-popup .leaflet-popup-content { margin: 8px; }
