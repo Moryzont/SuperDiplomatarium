@@ -47,7 +47,7 @@ function initializeMap() {
       draw: {
         polygon: { shapeOptions: { color: '#BC6C25', weight: 2, fillColor: '#DDA15E', fillOpacity: .12 } },
         rectangle: { shapeOptions: { color: '#BC6C25', weight: 2, fillColor: '#DDA15E', fillOpacity: .12 } },
-        circle: false, marker: false, polyline: false
+        circle: false, circlemarker: false, marker: false, polyline: false
       },
       edit: { featureGroup: drawnItems }
     });

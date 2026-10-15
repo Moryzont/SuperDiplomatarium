@@ -2173,9 +2173,10 @@ mark {
 .leaflet-container .marker-cluster-large div { background: var(--c-clay); }
 /* zoom and drawing controls like the secondary buttons */
 .leaflet-bar { border: 2px solid var(--c-olive); border-radius: 8px; box-shadow: none; overflow: hidden; }
-.leaflet-bar a, .leaflet-bar a:hover { background: var(--c-light); color: var(--c-dark); border-bottom: 1px solid var(--c-olive); }
-.leaflet-bar a:hover { background: var(--c-olive); color: var(--c-light); }
-.leaflet-bar a.leaflet-disabled { background: var(--c-light); color: var(--c-olive); opacity: .5; }
+/* background-color only: the drawing buttons carry their icons as a background image */
+.leaflet-bar a, .leaflet-bar a:hover { background-color: var(--c-light); color: var(--c-dark); border-bottom: 1px solid var(--c-olive); }
+.leaflet-bar a:hover { background-color: var(--c-olive); color: var(--c-light); }
+.leaflet-bar a.leaflet-disabled { background-color: var(--c-light); color: var(--c-olive); opacity: .45; }
 .leaflet-draw-toolbar a { background-color: var(--c-light); }
 .leaflet-draw-toolbar a:hover { background-color: var(--c-olive); }
 .leaflet-draw-actions a { background: var(--c-light); color: var(--c-dark); border: 2px solid var(--c-olive); }
