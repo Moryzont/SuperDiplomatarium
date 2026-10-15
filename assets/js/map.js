@@ -45,8 +45,8 @@ function initializeMap() {
   if (hasDraw) {
     drawControl = new L.Control.Draw({
       draw: {
-        polygon: { shapeOptions: { color: '#BC6C25', weight: 2, fillColor: '#DDA15E', fillOpacity: .12 } },
-        rectangle: { shapeOptions: { color: '#BC6C25', weight: 2, fillColor: '#DDA15E', fillOpacity: .12 } },
+        polygon: { shapeOptions: { color: '#7a3e0f', weight: 3, fillColor: '#DDA15E', fillOpacity: .15 } },
+        rectangle: { shapeOptions: { color: '#7a3e0f', weight: 3, fillColor: '#DDA15E', fillOpacity: .15 } },
         circle: false, circlemarker: false, marker: false, polyline: false
       },
       edit: { featureGroup: drawnItems }
