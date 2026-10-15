@@ -1,5 +1,5 @@
 /* global L, window, document */
-let map, markers, drawnItems;
+let map, markers, drawnItems, drawControl;
 let mentionLayer = null;  // connections from a selected letter to its mentioned places
 let lettersData = [];
 const fullDataCache = new Map();
@@ -43,7 +43,7 @@ function initializeMap() {
 
   const hasDraw = L && L.Control && typeof L.Control.Draw === 'function';
   if (hasDraw) {
-    const drawControl = new L.Control.Draw({
+    drawControl = new L.Control.Draw({
       draw: {
         polygon: { shapeOptions: { color: '#BC6C25', weight: 2, fillColor: '#DDA15E', fillOpacity: .12 } },
         rectangle: { shapeOptions: { color: '#BC6C25', weight: 2, fillColor: '#DDA15E', fillOpacity: .12 } },
@@ -53,6 +53,8 @@ function initializeMap() {
     });
     map.addControl(drawControl);
     map.on('draw:created', handleAreaDrawn);
+    map.on('draw:edited', selectByShapes);
+    map.on('draw:deleted', selectByShapes);
   } else {
     console.warn('Leaflet.Draw was not loaded; area selection disabled.');
   }
@@ -316,17 +318,43 @@ function toRoman(num) {
 }
 
 // ---------- utvalg ----------
+// Every drawn shape stays on the map; the selection is the union of the
+// letters inside any of them (a letter counts once). Polygons are tested
+// properly (ray casting), rectangles by their bounds.
 function handleAreaDrawn(e) {
-  const layer = e.layer;
-  drawnItems.addLayer(layer);
-  selectByBounds(layer.getBounds());
+  drawnItems.addLayer(e.layer);
+  selectByShapes();
 }
 
-function selectByBounds(bounds) {
+function pointInRing(lat, lon, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const yi = ring[i].lat, xi = ring[i].lng, yj = ring[j].lat, xj = ring[j].lng;
+    if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function shapeContains(layer, lat, lon) {
+  if (!layer.getBounds().contains([lat, lon])) return false;
+  if (layer instanceof L.Rectangle || !(layer instanceof L.Polygon)) return true;
+  const rings = layer.getLatLngs();
+  const outer = Array.isArray(rings[0]) ? rings[0] : rings;   // first ring of a simple polygon
+  return pointInRing(lat, lon, outer);
+}
+
+function selectByShapes() {
+  const shapes = drawnItems.getLayers();
+  if (!shapes.length) { displaySelectedLetters([], 0); return; }
   const selected = lettersData.filter(l =>
-    Number.isFinite(l.la) && Number.isFinite(l.lo) && bounds.contains([l.la, l.lo])
+    Number.isFinite(l.la) && Number.isFinite(l.lo) && shapes.some(sh => shapeContains(sh, l.la, l.lo))
   );
-  displaySelectedLetters(selected);
+  displaySelectedLetters(selected, shapes.length);
+}
+
+function selectByBounds(bounds) {   // test hook
+  displaySelectedLetters(lettersData.filter(l =>
+    Number.isFinite(l.la) && Number.isFinite(l.lo) && bounds.contains([l.la, l.lo])), 1);
 }
 
 // Test/debug hook
@@ -340,7 +368,7 @@ window.__SD_MAP = {
   }
 };
 
-function displaySelectedLetters(letters) {
+function displaySelectedLetters(letters, shapeCount = 1) {
   const container = document.getElementById('selected-letters');
   if (!container) return;
 
@@ -359,7 +387,7 @@ function displaySelectedLetters(letters) {
   }
 
   const html = `
-    <h3>${MT('map.inArea', { n: letters.length })}</h3>
+    <h3>${shapeCount > 1 ? MT('map.inAreas', { n: letters.length, k: shapeCount }) : MT('map.inArea', { n: letters.length })}</h3>
     <div class="letter-list">
       ${letters.map(l => {
         const date = formatDateRange(l.ds, l.de, l.od);
@@ -430,15 +458,23 @@ function wireSelectionList() {
       const full = await loadFullData(parseInt(details.dataset.idx, 10));
       summaryEl.dataset.loaded = '1';
       summaryEl.innerHTML = [
-        section('Sammendrag', full?.sammendrag || full?.regest, 'sammendrag'),
-        section('Brevtekst', full?.brevtekst, 'brevtekst'),
-        section('Fotnoter', full?.fotnoter, 'fotnoter')
-      ].filter(Boolean).join('') || '<em>Ingen tekst tilgjengelig.</em>';
+        section(MT('letter.summary'), full?.sammendrag || full?.regest, 'sammendrag'),
+        section(MT('letter.bodyTitle'), full?.brevtekst, 'brevtekst'),
+        section(MT('letter.footnotesTitle'), full?.fotnoter, 'fotnoter')
+      ].filter(Boolean).join('') || `<em>${MT('letter.noText')}</em>`;
     }
   });
 }
 
 function wireButtons() {
+  // "Tegn område" starts the rectangle tool (the toolbar on the map offers polygons too)
+  const drawBtn = document.getElementById('draw-area');
+  if (drawBtn) {
+    drawBtn.addEventListener('click', () => {
+      if (!drawControl || !L.Draw?.Rectangle) return;
+      new L.Draw.Rectangle(map, drawControl.options.draw.rectangle).enable();
+    });
+  }
   const clearBtn = document.getElementById('clear-selection');
   if (clearBtn) {
     clearBtn.addEventListener('click', () => {

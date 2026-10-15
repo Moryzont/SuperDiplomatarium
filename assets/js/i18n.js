@@ -135,6 +135,9 @@ const TRANSLATIONS = {
     'letter.moreRelated': '{n} flere relaterte oppføringer',
     'letter.clickToShow': 'klikk for å vise',
     'letter.crossRefs': 'Kryssreferanser:',
+    'map.inAreas': '{n} brev i {k} valgte områder',
+    'letter.bodyTitle': 'Brevtekst',
+    'letter.noText': 'Ingen tekst tilgjengelig.',
     'lang.switch': 'English',
   },
 
@@ -269,6 +272,9 @@ const TRANSLATIONS = {
     'letter.moreRelated': '{n} more related entries',
     'letter.clickToShow': 'click to show',
     'letter.crossRefs': 'Cross-references:',
+    'map.inAreas': '{n} letters in {k} selected areas',
+    'letter.bodyTitle': 'Letter text',
+    'letter.noText': 'No text available.',
     'lang.switch': 'Norsk',
   }
 };
