@@ -163,6 +163,9 @@ async function main() {
     await sleep(2500);
     const diFooter = await page.$eval('.letter-card .letter-footer', el => el.textContent).catch(() => '');
     check('DI detail shows the source apparatus', /DI:/.test(diFooter), diFooter.slice(0, 80));
+    const diCont = await page.$eval('.letter-card .letter-continuation', el => el.textContent).catch(() => '');
+    check('DI detail shows register mentions', /Nevnte:|Mentioned:/.test(diCont), diCont.slice(0, 80));
+    check('DI detail shows subject headings', /Emneord:|Subjects:/.test(diCont), '');
 
     console.log('\n[detail expansion]');
     r = await runSearch(page, { query: 'jordegods', field: 'text' });
