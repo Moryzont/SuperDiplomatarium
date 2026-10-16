@@ -14,13 +14,14 @@
   method: >-
     Filene er lest maskinelt: regest, brevtekst, kildeapparat («Kilde») og
     fotnoter er skilt ut felt for felt, og DN-nummer, dato og sted er
-    standardisert. Bindenes trykte navne- og sakregistre leses fra
-    Nasjonalbibliotekets OCR (nb.no) side for side; registrenes sidetall
-    knyttes til brevene på siden, og brevets egen tekst avgjør hvilket brev
-    på siden som menes. Bind I er lest inn.
+    standardisert. Bindenes trykte navne- og sakregistre er avskrevet fra
+    Nasjonalbibliotekets skanninger side for side. Et registeroppslag vises
+    bare når det er bekreftet: av brevets egen tekst, av at siden har ett
+    brev, eller av en leser som har lest alle brevene på siden i sin helhet.
+    Bind I–V er lest inn (om lag 67 000 oppslag på 5 700 brev).
   todo:
-    - Registrene i bind II–XXIII leses inn på samme måte som bind I.
-    - Registeroppslag som brevtekstene ikke bekrefter (en fjerdedel i bind I) står igjen for en ny gjennomgang.
+    - Registrene i bind VI–XXIII leses inn på samme måte som bind I–V.
+    - Om lag 2 300 registeroppslag i bind I–V som ingen leser fant igjen i brevene på siden, står igjen for en ny gjennomgang.
     - Fullføre stedfestingen av brevene som ennå mangler koordinat.
     - Maskinoversettelse av brevtekstene til norsk.
 - key: RN
