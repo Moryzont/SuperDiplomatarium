@@ -266,6 +266,7 @@ function makePfHandle(pfResult) {
         sdhk: m.sdhk || null,
         dd: m.dd || null,
         df: m.df || null,
+        di: m.di || null,
         src: m.src || '',
         rel: m.rel ? JSON.parse(m.rel) : [],
         ds: m.ds || '',
@@ -1423,12 +1424,12 @@ async function downloadExport(format) {
   await loadFullDataForIndices(letters.map(l => l.i));
 
   if (format === 'csv') {
-    const headers = ['SD_ID', 'DN_REF', 'RN_REF', 'SDHK_REF', 'DD_REF', 'DF_REF', 'date_start', 'date_end', 'place', 'sammendrag', 'regest'];
+    const headers = ['SD_ID', 'DN_REF', 'RN_REF', 'SDHK_REF', 'DD_REF', 'DF_REF', 'DI_REF', 'date_start', 'date_end', 'place', 'sammendrag', 'regest'];
     const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const lines = [headers.join(',')];
     for (const l of letters) {
       const full = getFullData(l.i) || {};
-      lines.push([l.id, l.d, l.r, l.sdhk, l.dd, l.df, l.ds, l.de, l.p, full.sammendrag, full.regest].map(esc).join(','));
+      lines.push([l.id, l.d, l.r, l.sdhk, l.dd, l.df, l.di, l.ds, l.de, l.p, full.sammendrag, full.regest].map(esc).join(','));
     }
     downloadBlob(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), 'sok-treff.csv');
   } else {
@@ -1436,7 +1437,7 @@ async function downloadExport(format) {
     for (const l of letters) {
       const full = getFullData(l.i) || {};
       parts.push([
-        `${l.d || l.r || l.sdhk || l.dd || l.df || l.id || 'Uten referanse'}`,
+        `${l.d || l.r || l.sdhk || l.dd || l.df || l.di || l.id || 'Uten referanse'}`,
         `Dato: ${formatDateRange(l.ds, l.de, l.od)} | Sted: ${l.p || TR('letter.unknown')}`,
         '',
         full.sammendrag ? `SAMMENDRAG:\n${full.sammendrag}` : '',
