@@ -412,6 +412,17 @@ function parseFootnotes(footnotesStr) {
   if (!footnotesStr) return new Map();
 
   const footnoteMap = new Map();
+  // DI (from scans): one footnote per line, "1) text". The printed numbers
+  // restart on every page, so the list keeps every line in print order under
+  // its own position and shows the printed number with the text.
+  if (/^\d+\)\s/m.test(footnotesStr) && !/\[\^?\d+\]/.test(footnotesStr)) {
+    let pos = 0;
+    for (const line of footnotesStr.split(/\n+/)) {
+      const lm = line.match(/^(\d+)\)\s*(.*)$/);
+      if (lm && lm[2].trim()) footnoteMap.set(++pos, `${lm[1]}) ${lm[2].trim()}`);
+    }
+    return footnoteMap;
+  }
   const marker = /\[\^?0*(\d+)\]\s*/g;
   const boundaries = [];
   let m;
@@ -484,7 +495,9 @@ function renderLetterDetails(full) {
   // Format text content with footnotes
   const formatTextWithFootnotes = (text) => {
     if (!text) return '';
-    return renderTextWithFootnotes(text, footnoteMap).replace(/\n/g, '<br>');
+    return renderTextWithFootnotes(text, footnoteMap)
+      .replace(/\n\n+/g, '<br><br>').replace(/\n/g, '<br>')
+      .replace(/ ?♦ ?/g, ' <span class="dd-mark" title="♦ = ny periode i utgaven">♦</span> ');   // DD's sentence mark
   };
 
   // Get main text - use sammendrag first, then fall back through alternatives
@@ -589,32 +602,29 @@ function renderLetterDetails(full) {
     }
   }
 
-  // Add regest if different from main text
+  // The three texts a letter can have — the editor's summary (shown above as
+  // the main text), the letter text, the modern translation — each as its
+  // own headed block; the translation is only ever shown when it differs
+  // from what is already on screen.
+  const textBlock = (label, html) => `<div class="detail-section text-block"><div class="text-block-label">${label}</div><div class="text-block-body">${html}</div></div>`;
   const hasRegest = regest && regest !== fullSammendrag;
   if (hasRegest) {
-    continuation += `<div class="detail-section"><em>Regest:</em> ${formatTextWithFootnotes(regest)}</div>`;
+    continuation += textBlock('Regest:', formatTextWithFootnotes(regest));
   }
-
-  // Add brevtekst if not used as main and exists
   const showBrevtekstSeparate = usedFallback !== 'brevtekst' && brevtekst && brevtekst !== fullSammendrag;
   if (showBrevtekstSeparate) {
-    continuation += `<div class="detail-section"><em>${LT('letter.body')}</em> ${formatTextWithFootnotes(brevtekst)}</div>`;
+    continuation += textBlock(LT('letter.body'), formatTextWithFootnotes(brevtekst));
+  }
+  const oversettelse = full.oversettelse?.trim() || '';
+  if (oversettelse && oversettelse !== fullSammendrag && oversettelse !== brevtekst) {
+    continuation += textBlock(LT('letter.translation'), formatTextWithFootnotes(oversettelse));
   }
 
-  // Modern translation (DD: tran_text), separate from the original text
-  if (full.oversettelse?.trim()) {
-    continuation += `<div class="detail-section"><em>${LT('letter.translation')}</em> ${formatTextWithFootnotes(full.oversettelse)}</div>`;
-  }
-
-  // Critical apparatus (DD: variant readings per witness)
-  if (full.tekstapparat?.trim()) {
-    continuation += `<div class="detail-section"><em>Tekstapparat:</em> ${escapeHtml(full.tekstapparat)}</div>`;
-  }
-
-  // Editorial notes (DD: nts)
-  if (full.noter?.trim()) {
-    continuation += `<div class="detail-section"><em>Noter:</em> ${escapeHtml(full.noter)}</div>`;
-  }
+  // Editorial matter (critical apparatus, the editors' notes, the notes an
+  // OCR structuring left, the footnote list) is folded away by default.
+  const editorial = [];
+  if (full.tekstapparat?.trim()) editorial.push(`<div class="detail-section"><em>Tekstapparat:</em> ${escapeHtml(full.tekstapparat).replace(/\n/g, '<br>')}</div>`);
+  if (full.noter?.trim()) editorial.push(`<div class="detail-section"><em>Noter:</em> ${escapeHtml(full.noter).replace(/\n/g, '<br>')}</div>`);
 
   // People and places mentioned in the letter (tagged in the curation tool
   // or seeded from the edition's own register); the register's subject
@@ -641,10 +651,7 @@ function renderLetterDetails(full) {
     }
   }
 
-  // Add tillegg if present
-  if (full.Tillegg?.trim()) {
-    continuation += `<div class="detail-section"><em>Tillegg:</em> ${escapeHtml(full.Tillegg)}</div>`;
-  }
+  if (full.Tillegg?.trim()) editorial.push(`<div class="detail-section"><em>Tillegg:</em> ${escapeHtml(full.Tillegg).replace(/\n/g, '<br>')}</div>`);
 
   // Language (curator tag, or the source's own statement)
   if (full.language?.trim()) {
@@ -674,7 +681,10 @@ function renderLetterDetails(full) {
     for (const [num, text] of footnoteMap) {
       fnItems.push(`<div class="footnote-item"><span class="footnote-num">${num}.</span> ${escapeHtml(text)}</div>`);
     }
-    footer += `<div class="detail-section"><em>${LT('letter.footnotes')}</em><div class="footnotes-list">${fnItems.join('')}</div></div>`;
+    editorial.push(`<div class="detail-section"><em>${LT('letter.footnotes')}</em><div class="footnotes-list">${fnItems.join('')}</div></div>`);
+  }
+  if (editorial.length) {
+    continuation += `<div class="detail-section"><details class="editorial"><summary>${LT('letter.editorial')} <span class="editorial-count">${editorial.length}</span></summary>${editorial.join('')}</details></div>`;
   }
 
   // External links

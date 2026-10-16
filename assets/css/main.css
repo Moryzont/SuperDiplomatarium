@@ -2197,3 +2197,14 @@ mark {
 .leaflet-container a.leaflet-popup-close-button:hover { color: var(--c-dark); }
 .leaflet-tooltip { background: var(--c-light); color: var(--c-dark); border: 2px solid var(--c-olive); border-radius: 8px; box-shadow: none; }
 .shape-popup .leaflet-popup-content { margin: 8px; }
+
+/* letter detail: the texts as headed blocks, DD's sentence mark muted, editorial matter folded */
+.text-block { margin: .6rem 0; }
+.text-block-label { font-style: italic; color: var(--c-olive, #5c6d4a); margin-bottom: .15rem; }
+.text-block-body { line-height: 1.45; }
+.dd-mark { color: #b5ad9a; font-size: .7em; vertical-align: .15em; }
+details.editorial > summary { cursor: pointer; font-style: italic; color: var(--c-olive, #5c6d4a); }
+details.editorial > summary .editorial-count { font-style: normal; font-size: .8em; opacity: .7; margin-left: .25rem; }
+details.editorial[open] > summary { margin-bottom: .35rem; }
+details.editorial .detail-section { margin-left: .5rem; }
+
