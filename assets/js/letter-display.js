@@ -118,11 +118,11 @@ function formatReference(ref, sourceKey) {
 
   // RN format: RN00100234 -> RN I, 234
   if (sourceKey === 'RN') {
-    const m = refStr.match(/^RN(\d{3})(\d{5})$/i);
+    const m = refStr.match(/^RN(\d{3})[_-]?(\d{5})$/i);     // the store's RN009_00344 and the old RN00900344
     if (m) {
       const vol = parseInt(m[1], 10);
       const num = parseInt(m[2], 10);
-      return `RN ${toRoman(vol)}, ${num}`;
+      return `RN ${toRoman(vol)} nr. ${num}`;
     }
   }
 
@@ -719,7 +719,9 @@ function renderLetterDetails(full) {
       .filter(cr => cr.ref)
       .map(cr => cr.ref)
       // extractor garbage: collapsed archive signums and volume-zero refs
-      .filter(r => !/^(?:RA|NRA|DRA|Est)_\d+$|^DN_00_/.test(r));
+      .filter(r => !/^(?:RA|NRA|DRA|Est)_\d+$|^DN_00_/.test(r))
+      // the editions' own forms ("DN I nr. 11", "RN IX nr. 344"), not the store's ids
+      .map(r => formatReference(r, (r.match(/^(DN|RN|DD|SDHK|DF|DI)/i) || [,''])[1].toUpperCase()) || r);
 
     if (crossRefs.length > 0) {
       footer += `<div class="detail-section"><em>${LT('letter.crossRefs')}</em> ${escapeHtml(crossRefs.join(' | '))}</div>`;
