@@ -235,7 +235,9 @@ async function main() {
     check('DN card shows its record count and span', /\d.*brev.*\d{3,4}–\d{3,4}/.test(om.dnCount), om.dnCount);
     check('coverage bars are filled from collections.json', parseFloat(om.dnBody) > 90, om.dnBody);
     check('to-do list rendered from _data/collections.yml', om.diTodo.length > 10, om.diTodo.slice(0, 60));
-    await page.goto(`${BASE_URL}/sok/`, { waitUntil: 'networkidle2' });
+    await page.goto(`${BASE_URL}/sok/`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForSelector('#search-btn', { timeout: 30000 });
+    await sleep(1500);
 
     console.log('\n[RN register mentions]');
     r = await runSearch(page, { query: 'SD01007880', field: 'id' });
