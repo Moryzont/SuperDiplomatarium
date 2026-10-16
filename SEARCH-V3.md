@@ -144,3 +144,14 @@ Tests: `node tests/test-map-v3.mjs`.
 
 - CI build-and-deploy workflow (GitHub Actions) — planned, not pushed yet.
   When deploying, exclude `data/chunks/` from the published site.
+
+## Register search (2026-10-16)
+
+A fourth Pagefind index, `data/v3/pagefind-register`, holds each letter's
+register headwords (persons, places, subject headings from the editions'
+registers, `nevnte` in the chunks), unstemmed under the language code `la`.
+The field "Register (personer, steder, emneord)" searches it alone; "Alt"
+includes it. A chip in the letter detail links to
+`/sok/?felt=register&q=<headword>`, so every headword is one click away from
+all the letters it is attached to.
+

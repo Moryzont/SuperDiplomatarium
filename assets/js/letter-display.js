@@ -641,7 +641,10 @@ function renderLetterDetails(full) {
       const where = (m.lat != null && m.lon != null) ? ` · ${m.lat}, ${m.lon}` : '';
       const style = colour ? ` style="border-color:${colour};color:${colour}"` : '';
       const cls = `nevnt-chip nevnt-${m.kind}${key ? '' : ' nevnt-kuratert'}`;
-      return `<span class="${cls}"${style} title="${from}${where}">${icon} ${label}</span>`;
+      // every headword links to the register search for all letters carrying it
+      const BASE = (window.SITE_BASE || '').replace(/\/+$/, '');
+      const href = `${BASE}/sok/?felt=register&q=${encodeURIComponent((m.name || m.text || '').trim())}`;
+      return `<a class="${cls}"${style} href="${href}" title="${from}${where}">${icon} ${label}</a>`;
     };
     const sorted = [...full.nevnte].sort((a, b) => (ORDER[a.kind] ?? 9) - (ORDER[b.kind] ?? 9));
     continuation += `<div class="detail-section nevnte"><details class="register"><summary>${LT('letter.mentions')} <span class="editorial-count">${sorted.length}</span></summary><div class="register-chips">${sorted.map(chip).join(' ')}</div></details></div>`;

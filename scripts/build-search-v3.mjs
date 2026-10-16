@@ -235,6 +235,16 @@ async function main() {
     return { url: c.url, content: places.join(', '), language: 'la', meta, sort: c.sort, filters: c.filters };
   }, 'la');
 
+  // 3b. Register index: the editions' registers on each letter (persons, places,
+  //     subject headings), so a headword can be searched and a chip clicked.
+  if (wants('register')) await buildIndex('pagefind-register', (i, r) => {
+    const names = [...new Set((Array.isArray(r.nevnte) ? r.nevnte : []).map(m => (m.name || m.text || '').trim()).filter(Boolean))];
+    if (!names.length) return null;
+    const c = common(i, r);
+    const meta = { ...c.meta, s: trunc(r.sammendrag || r.regest || '', 150) };
+    return { url: c.url, content: names.join('; '), language: 'la', meta, sort: c.sort, filters: c.filters };
+  }, 'la');
+
   // 4. Core table: compact arrays, position = global index (matches full-XX.json chunks).
   //    Fields: [SD_ID, DN, RN, SDHK, DD, DF, src, ds, de, rel, DI]   (DI appended last, 2026-10-15, so older offsets hold)
   if (wants('core')) {

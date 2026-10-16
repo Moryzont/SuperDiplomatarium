@@ -143,7 +143,8 @@ async function ensureCore() {
 // Which Pagefind indexes a search field uses.
 function indexesFor(field) {
   return field === 'text' ? ['main'] : field === 'fulltext' ? ['fulltext'] : field === 'place' ? ['place']
-    : field === 'all' ? ['main', 'place', 'fulltext'] : [];
+    : field === 'register' ? ['register']
+    : field === 'all' ? ['main', 'place', 'register', 'fulltext'] : [];
 }
 
 // The first search on an index pays for its worker, wasm and a ~1.5 MB
@@ -336,10 +337,13 @@ function romanToInt(roman) {
 function parseIdQuery(query) {
   const q = query.trim();
 
-  const romanMatch = q.match(/^(DN|RN)\s+([IVXLCDM]+)[,\s]+(\d+)$/i);
+  // "DN XII 251", "DN 12 251", "DN XII, 251", "RN IX nr. 344", "RN 9 344": the
+  // volume in Roman or Arabic numerals, the number after a comma, a space or "nr."
+  const volNum = (v) => /^\d+$/.test(v) ? parseInt(v, 10) : romanToInt(v);
+  const romanMatch = q.match(/^(DN|RN)\s+([IVXLCDM]+|\d{1,2})[,.]?\s*(?:nr\.?\s*)?(\d+)$/i);
   if (romanMatch) {
     const source = romanMatch[1].toUpperCase();
-    const vol = romanToInt(romanMatch[2]);
+    const vol = volNum(romanMatch[2]);
     const num = parseInt(romanMatch[3], 10);
     if (source === 'DN') {
       return { type: 'id', source, id: `DN${String(vol).padStart(2, '0')}${String(num).padStart(6, '0')}` };
@@ -348,9 +352,9 @@ function parseIdQuery(query) {
   }
 
   // DI II nr. 154 / DI II 154 / DI I Viðbætir nr. 3 / DI02_00154
-  const diMatch = q.match(/^DI\s+([IVXLCDM]+)\s+(Viðb\S*\s+)?(?:nr\.?\s*)?(\d+)$/i);
+  const diMatch = q.match(/^DI\s+([IVXLCDM]+|\d{1,2})[,.]?\s+(Viðb\S*\s+)?(?:nr\.?\s*)?(\d+)$/i);
   if (diMatch) {
-    const vol = romanToInt(diMatch[1]);
+    const vol = volNum(diMatch[1]);
     const num = parseInt(diMatch[3], 10) + (diMatch[2] ? 1000 : 0);
     return { type: 'id', source: 'DI', id: `DI${String(vol).padStart(2, '0')}_${String(num).padStart(5, '0')}` };
   }
@@ -753,18 +757,21 @@ async function performSearch() {
       results = await searchIndex('fulltext', rawQuery, buildPfOptions());
     } else if (searchField === 'place') {
       results = await searchIndex('place', rawQuery, buildPfOptions());
+    } else if (searchField === 'register') {
+      results = await searchIndex('register', rawQuery, buildPfOptions());
     } else if (searchField === 'all') {
       // Text + place + fulltext + ID substring, merged in sort order; a letter
       // found in several indexes is shown once (dedupe happens as pages are
       // resolved, so the count can shrink on the last page)
       const opts = buildPfOptions();
-      const [main, place, fulltext, idHits] = await Promise.all([
+      const [main, place, register, fulltext, idHits] = await Promise.all([
         searchIndex('main', rawQuery, opts),
         searchIndex('place', rawQuery, opts),
+        searchIndex('register', rawQuery, opts),
         searchIndex('fulltext', rawQuery, opts),
         coreIdSearch(rawQuery)
       ]);
-      results = mergedResults([...main.queues, idHits, ...place.queues, ...fulltext.queues], getSortMode());
+      results = mergedResults([...main.queues, idHits, ...place.queues, ...register.queues, ...fulltext.queues], getSortMode());
     }
 
     if (seq !== STATE.activeSearchSeq) return;
@@ -841,6 +848,42 @@ function escapeHtml(s) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// Mark the query's words in the text nodes under `root` (after "Vis detaljer"
+// the full text, the editorial fold and the footer are new DOM; the card
+// preview was marked by highlightQuery as HTML). Word-start matches, as
+// Pagefind searches; the fuzzy variants are not expanded here.
+function highlightTerms(root, query) {
+  if (!root || !query) return;
+  const words = [...new Set(String(query).toLowerCase().split(/[\s,;:.()"«»]+/).filter(w => w.length >= 2))];
+  if (!words.length) return;
+  const rx = new RegExp(`(^|[^\\p{L}\\p{N}])(${words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'giu');
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => {
+      const p = n.parentElement;
+      if (!p || p.closest('mark, script, style, summary, .nevnt-chip, .date-mark')) return NodeFilter.FILTER_REJECT;
+      return rx.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+    }
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const n of nodes) {
+    const frag = document.createDocumentFragment();
+    let last = 0;
+    const text = n.nodeValue;
+    rx.lastIndex = 0;
+    for (const m of text.matchAll(rx)) {
+      const start = m.index + m[1].length;
+      frag.appendChild(document.createTextNode(text.slice(last, start)));
+      const mark = document.createElement('mark');
+      mark.textContent = m[2];
+      frag.appendChild(mark);
+      last = start + m[2].length;
+    }
+    frag.appendChild(document.createTextNode(text.slice(last)));
+    n.parentNode.replaceChild(frag, n);
+  }
 }
 
 function highlightQuery(text, query) {
@@ -1109,6 +1152,8 @@ async function loadAndShowDetails(idx, showingSourceIdx = null) {
       footerEl.innerHTML = details.footer;
       footerEl.style.display = 'block';
     }
+    // the search words stay marked in the full text, the fold and the footer
+    if (getSearchField() !== 'id') highlightTerms(card.querySelector('.letter-content') || card, STATE.currentQuery);
     return;
   }
 

@@ -239,6 +239,31 @@ async function main() {
     await page.waitForSelector('#search-btn', { timeout: 30000 });
     await sleep(1500);
 
+    console.log('\n[Register search, chips as links, Arabic volume numbers, highlight after expand]');
+    r = await runSearch(page, { query: 'Magnus Eriksson, konge', field: 'register' });
+    check('register search finds the letters carrying the headword', r.count >= 500, `count=${r.count}`);
+    r = await runSearch(page, { query: 'Erik Plovpenning', field: 'register' });
+    check('register search finds a DD headword', r.count >= 1 && r.cards.some(c => c.id === 'SD50019237'), `count=${r.count}`);
+    r = await runSearch(page, { query: 'SD50019237', field: 'id' });
+    await page.click('.letter-card .toggle-details');
+    await sleep(2500);
+    await page.$eval('.letter-card details.register', el => { el.open = true; });
+    const chipHref = await page.$eval('.letter-card details.register a.nevnt-chip', a => a.getAttribute('href')).catch(() => '');
+    check('register chips link to the register search', /\/sok\/\?felt=register&q=/.test(chipHref), chipHref);
+    r = await runSearch(page, { query: 'DN 5 145', field: 'id' });
+    check('DN 5 145 (Arabic volume) finds DN V 145', r.count === 1 && r.cards[0]?.id === 'SD20004762', `count=${r.count} id=${r.cards[0]?.id}`);
+    r = await runSearch(page, { query: 'RN 9 344', field: 'id' });
+    check('RN 9 344 (Arabic volume) found', r.count === 1, `count=${r.count}`);
+    r = await runSearch(page, { query: 'DI 2 154', field: 'id' });
+    check('DI 2 154 (Arabic volume) finds DI II nr. 154', r.count === 1 && r.cards[0]?.id === 'SD80000000', `count=${r.count}`);
+    r = await runSearch(page, { query: 'DN 5 145', field: 'all' });
+    check('Alt accepts the Arabic reference too', r.count >= 1 && r.cards[0]?.id === 'SD20004762', `count=${r.count}`);
+    r = await runSearch(page, { query: 'biskop', field: 'text', sources: ['DN'] });
+    await page.click('.letter-card .toggle-details');
+    await sleep(2500);
+    const marks = await page.$$eval('.letter-card .letter-content mark', els => els.length);
+    check('search word marked in the expanded details', marks >= 1, `marks=${marks}`);
+
     console.log('\n[RN register mentions]');
     r = await runSearch(page, { query: 'SD01007880', field: 'id' });
     check('RN 788 found', r.count === 1, `count=${r.count}`);
