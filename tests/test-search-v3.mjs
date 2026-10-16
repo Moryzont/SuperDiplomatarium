@@ -198,6 +198,30 @@ async function main() {
     check('editorial matter folded by default', ddState.fold && ddState.foldOpen === false, JSON.stringify(ddState));
     check('apparatus inside the fold', ddState.apparatusInFold, '');
 
+    console.log('\n[Dates: one form, marks, the editions\' words]');
+    const dateOf = async () => page.$eval('.letter-card .letter-date', el => ({
+      text: [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim(),
+      q: !!el.querySelector('.date-mark-q'), alt: !!el.querySelector('.date-mark-alt'),
+    })).catch(() => ({ text: '', q: false, alt: false }));
+    r = await runSearch(page, { query: 'SD20000318', field: 'id' });
+    let dt = await dateOf();
+    check('DN 7 August 1349 shows as 7. august 1349', dt.text === '7. august 1349', dt.text);
+    check('≠ mark when RN dates the document differently', dt.alt, JSON.stringify(dt));
+    await page.click('.letter-card .toggle-details');
+    await sleep(2500);
+    const edDating = await page.$eval('.letter-card details.editorial', el => el.textContent).catch(() => '');
+    check('editorial fold lists the editions\' datings', /Datering i utgavene|Dating in the editions/.test(edDating) && /1350 aug 6/.test(edDating), edDating.slice(0, 120));
+    r = await runSearch(page, { query: 'SD07015640', field: 'id' });
+    dt = await dateOf();
+    check('[før 1389 nov 26] is the window 1. januar – 25. november 1389', dt.text === '1. januar – 25. november 1389', dt.text);
+    check('? mark on a bounded dating', dt.q, JSON.stringify(dt));
+    r = await runSearch(page, { query: 'SD50006941', field: 'id' });
+    dt = await dateOf();
+    check('DD bare year 1334 shows as 1334', dt.text === '1334', dt.text);
+    r = await runSearch(page, { query: 'biskop', field: 'text' });
+    const rawDates = await page.$$eval('.letter-card .letter-date', els => els.map(e => e.textContent).filter(t => /[\[\]]/.test(t)));
+    check('no card prints an edition string with brackets', rawDates.length === 0, rawDates.slice(0, 3).join(' | '));
+
     console.log('\n[RN register mentions]');
     r = await runSearch(page, { query: 'SD01007880', field: 'id' });
     check('RN 788 found', r.count === 1, `count=${r.count}`);
