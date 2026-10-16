@@ -206,25 +206,11 @@ function getLetterID(letter) {
  * Format date range for display
  */
 function formatDateRange(start, end, original) {
-  // If original date string exists, use it
-  if (original && String(original).trim()) {
-    // Clean up common patterns
-    let cleaned = String(original).trim();
-    // Remove leading zeros/placeholders
-    cleaned = cleaned.replace(/^0{4,}[;,]?\s*/g, '');
-    if (cleaned) return cleaned;
-  }
-
-  const ys = parseYear(start);
-  const ye = parseYear(end) || ys;
-
-  if (ys && ye) {
-    return ys === ye ? String(ys) : `${ys}-${ye}`;
-  }
-  if (ys) return String(ys);
-  if (ye) return String(ye);
-
-  return LT('letter.unknown.date');
+  // one normalised form (assets/js/i18n.js); the edition's words only when there is no window
+  if (typeof sdFormatDate === 'function') return sdFormatDate(start, end, original);
+  const ys = parseYear(start), ye = parseYear(end) || ys;
+  if (ys && ye) return ys === ye ? String(ys) : `${ys}-${ye}`;
+  return String(original || '').trim() || LT('letter.unknown.date');
 }
 
 function parseYear(s) {
@@ -364,7 +350,7 @@ function renderSearchResultCard(letter, options = {}) {
       </div>
       <div class="letter-refs">${renderReferencesLine(letter)}</div>
       <div class="letter-meta" data-idx="${idx}">
-        <span class="letter-date">${escapeHtml(date)}</span>
+        <span class="letter-date">${escapeHtml(date)}${(typeof sdDateMarks === "function") ? sdDateMarks(letter.dq || letter) : ""}</span>
         <span class="letter-place">${escapeHtml(place)}</span>
         <span class="letter-meta-expanded" style="display:none;"></span>
       </div>
@@ -563,9 +549,6 @@ function renderLetterDetails(full) {
   const uniqueDateVals = new Set(sourceDates.map(d => d.val.trim()));
   const uniquePlaceVals = new Set(sourcePlaces.map(sp => sp.val.replace(/[.\s]+$/, '').toLowerCase()));
   const metaRows = [];
-  if (sourceDates.length > 1 && uniqueDateVals.size > 1) {
-    for (const d of sourceDates) metaRows.push([`Datering ${d.src}`, d.val]);
-  }
   if (sourcePlaces.length > 1 && uniquePlaceVals.size > 1) {
     for (const sp of sourcePlaces) metaRows.push([`Sted ${sp.src}`, sp.val]);
   }
@@ -623,6 +606,20 @@ function renderLetterDetails(full) {
   // Editorial matter (critical apparatus, the editors' notes, the notes an
   // OCR structuring left, the footnote list) is folded away by default.
   const editorial = [];
+  // Datering i utgavene: this edition's own words, and the other editions'
+  // datings of the same document when they differ (export: date_alt).
+  {
+    const items = [];
+    const own = full.original_date || full.DN_dato || full.RN_dato;
+    const ownSrc = full.source || (full.DN_REF ? 'DN' : full.RN_REF ? 'RN' : '');
+    if (own) items.push(`<li><span class="src">${escapeHtml(ownSrc)}</span>${escapeHtml(LT('date.thisEdition', { src: '', text: own }).replace(/^\s+/, ''))}</li>`);
+    for (const d of (Array.isArray(full.date_alt) ? full.date_alt : [])) {
+      const norm = (typeof sdFormatDate === 'function') ? sdFormatDate(d.start, d.end, d.text) : `${d.start}–${d.end}`;
+      items.push(`<li><span class="src">${escapeHtml(d.src)}</span>${escapeHtml(LT('date.otherEdition', { src: '', text: d.text || '', norm }).replace(/^\s+/, ''))}</li>`);
+    }
+    if (full.date_curated) items.push(`<li><span class="src">SD</span>${escapeHtml(LT('date.curated'))}</li>`);
+    if (items.length) editorial.push(`<div class="detail-section"><em>${LT('date.inEdition')}</em>${(typeof sdDateMarks === 'function') ? sdDateMarks(full) : ''}<ul class="dating-list">${items.join('')}</ul></div>`);
+  }
   if (full.tekstapparat?.trim()) editorial.push(`<div class="detail-section"><em>Tekstapparat:</em> ${escapeHtml(full.tekstapparat).replace(/\n/g, '<br>')}</div>`);
   if (full.noter?.trim()) editorial.push(`<div class="detail-section"><em>Noter:</em> ${escapeHtml(full.noter).replace(/\n/g, '<br>')}</div>`);
 

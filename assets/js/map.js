@@ -84,7 +84,7 @@ async function loadLettersForMap() {
         d: rec[4] || null, r: rec[5] || null, sdhk: rec[6] || null,
         dd: rec[7] || null, df: rec[8] || null, src: rec[9] || '',
         ds: rec[10] || '', de: rec[11] || '', od: rec[12] || '', p: rec[13] || '',
-        di: rec[14] || null
+        di: rec[14] || null, dq: rec[15] || ''
       };
       lettersData.push(letter);
 
@@ -181,7 +181,7 @@ function renderMapPopup(letter, summary = '') {
     <div class="map-popup">
       <div class="source-badges">${badges}</div>
       ${refs ? `<div class="popup-refs">${refs}</div>` : ''}
-      <p class="popup-meta"><strong>${escapeHtml(date)}</strong> - ${escapeHtml(place)}</p>
+      <p class="popup-meta"><strong>${escapeHtml(date)}${sdDateMarks(letter.dq)}</strong> - ${escapeHtml(place)}</p>
       ${summary ? `<p class="popup-summary">${escapeHtml(summary)}</p>` : ''}
       <p class="popup-actions">
         <button class="popup-show-letter btn-link" data-letter-id="${letter.__id}">${MT('map.showLetter')}</button>
@@ -291,13 +291,8 @@ function formatRef(ref, sourceKey) {
 // ---------- helpers ----------
 
 function formatDateRange(start, end, original) {
-  if (original && String(original).trim()) return String(original);
-  const ys = parseYear(start);
-  const ye = parseYear(end) ?? ys;
-  if (ys && ye) return ys === ye ? String(ys) : `${ys}–${ye}`;
-  if (ys) return String(ys);
-  if (ye) return String(ye);
-  return 'Ukjent';
+  // one normalised form (assets/js/i18n.js); the edition's words only when there is no window
+  return sdFormatDate(start, end, original);
 }
 function parseYear(s) { const m = String(s || '').match(/^(\d{4})/); return m ? Number(m[1]) : null; }
 function truncate(t, n) { return !t ? '' : (t.length <= n ? t : t.slice(0, n) + '…'); }
@@ -430,7 +425,7 @@ function displaySelectedLetters(letters, shapeCount = 1) {
           </div>
           ${refs ? `<div class="letter-refs"><span class="references">${escapeHtml(refs)}</span></div>` : ''}
           <div class="letter-meta">
-            <span class="letter-date">${escapeHtml(date)}</span>
+            <span class="letter-date">${escapeHtml(date)}${sdDateMarks(l.dq)}</span>
             <span class="letter-place">${escapeHtml(place)}</span>
           </div>
           <div class="letter-actions">

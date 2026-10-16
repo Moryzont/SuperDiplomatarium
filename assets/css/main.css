@@ -2208,3 +2208,12 @@ details.editorial[open] > summary, details.register[open] > summary { margin-bot
 .register-chips { margin-left: .5rem; }
 details.editorial .detail-section { margin-left: .5rem; }
 
+/* dates: one normalised form on every card; small marks for an uncertain dating and for editions that disagree */
+.date-mark { display: inline-block; font-size: .72em; line-height: 1; vertical-align: super; margin-left: .15em; padding: 0 .3em; border-radius: 999px; border: 1px solid currentColor; opacity: .7; cursor: help; font-style: normal; }
+.date-mark-q { color: var(--c-rust, #8c2f1b); }
+.date-mark-alt { color: var(--c-olive, #5c6d4a); }
+.date-mark-c { color: var(--c-olive, #5c6d4a); border-style: dashed; }
+.dating-list { margin: .2rem 0 0 .5rem; padding: 0; list-style: none; font-size: .9em; }
+.dating-list li { margin: .1rem 0; }
+.dating-list .src { font-weight: 600; margin-right: .3em; }
+

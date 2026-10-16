@@ -109,6 +109,20 @@ const TRANSLATIONS = {
     'letter.footnotesTitle': "Fotnoter",
     'letter.mentions': "Register (personer, steder og emner fra utgavenes registre)",
     'letter.subjects': "Emneord:",
+    'date.months': ["januar", "februar", "mars", "april", "mai", "juni", "juli", "august", "september", "oktober", "november", "desember"],
+    'date.uncertain': "Usikker datering",
+    'date.q.bracket': "dateringen er satt av utgiveren (i klammer)",
+    'date.q.question': "utgiveren setter spørsmålstegn ved dateringen",
+    'date.q.approx': "omtrentlig datering (ca.)",
+    'date.q.before': "bare en grense bakover (før …)",
+    'date.q.after': "bare en grense framover (etter …)",
+    'date.q.alt': "to mulige dateringer",
+    'date.q.between': "et tidsrom mellom to tidspunkter",
+    'date.differs': "Utgavene daterer brevet ulikt",
+    'date.curated': "Datering satt i SuperDiplomatarium",
+    'date.inEdition': "Datering i utgavene",
+    'date.thisEdition': "{src} skriver «{text}»",
+    'date.otherEdition': "{src} skriver «{text}», dvs. {norm}",
     'letter.mentionFrom': "Fra utgavens register ({src})",
     'letter.mentionCurated': "Lagt til i SuperDiplomatarium",
     'letter.language': "Språk:",
@@ -251,6 +265,20 @@ const TRANSLATIONS = {
     'letter.footnotesTitle': "Footnotes",
     'letter.mentions': "Index (persons, places and subjects from the editions' registers)",
     'letter.subjects': "Subjects:",
+    'date.months': ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+    'date.uncertain': "Uncertain dating",
+    'date.q.bracket': "the dating is supplied by the editor (in brackets)",
+    'date.q.question': "the editor queries the dating",
+    'date.q.approx': "approximate dating (c.)",
+    'date.q.before': "only a bound backwards (before …)",
+    'date.q.after': "only a bound forwards (after …)",
+    'date.q.alt': "two possible datings",
+    'date.q.between': "a span between two points",
+    'date.differs': "The editions date the letter differently",
+    'date.curated': "Dating set in SuperDiplomatarium",
+    'date.inEdition': "Dating in the editions",
+    'date.thisEdition': "{src} writes “{text}”",
+    'date.otherEdition': "{src} writes “{text}”, i.e. {norm}",
     'letter.mentionFrom': "From the edition's register ({src})",
     'letter.mentionCurated': "Added in SuperDiplomatarium",
     'letter.language': "Language:",
@@ -375,3 +403,53 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Export for use in other scripts
 window.i18n = { t, setLanguage, toggleLanguage, getLang };
+
+// ===================== Dates: one normalised form on every page =====================
+// The window (date_start, date_end) is the dating; the editions' own words stay in
+// the letter detail. Rules (docs/DECISIONS.md 2026-10-16): a day "7. august 1349",
+// a whole month "august 1349", a whole year "1349", spans "6.–17. april 1537",
+// "9. august – 24. august 1367", "1391–1410". English month names in English.
+function sdFormatDate(start, end, original) {
+  const months = t('date.months');
+  const en = currentLang === 'en';
+  const parse = (s) => { const m = String(s || '').match(/^(\d{3,4})-(\d{2})-(\d{2})/); return m ? { y: +m[1], m: +m[2], d: +m[3] } : null; };
+  const a = parse(start), b = parse(end) || a;
+  if (!a) {
+    const o = String(original || '').trim().replace(/^0{4,}[;,]?\s*/, '');
+    return o || t('letter.unknown.date');
+  }
+  const lastDay = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const day = (x) => en ? `${x.d} ${months[x.m - 1]}` : `${x.d}. ${months[x.m - 1]}`;
+  if (a.y === b.y && a.m === b.m && a.d === b.d) return `${day(a)} ${a.y}`;
+  const fromJan1 = a.m === 1 && a.d === 1, toDec31 = b.m === 12 && b.d === 31;
+  if (fromJan1 && toDec31) return a.y === b.y ? String(a.y) : `${a.y}–${b.y}`;
+  if (a.y === b.y && a.d === 1 && b.d === lastDay(b.y, b.m)) {
+    return a.m === b.m ? `${months[a.m - 1]} ${a.y}` : `${months[a.m - 1]}–${months[b.m - 1]} ${a.y}`;
+  }
+  if (a.y === b.y && a.m === b.m) return en ? `${a.d}–${b.d} ${months[a.m - 1]} ${a.y}` : `${a.d}.–${b.d}. ${months[a.m - 1]} ${a.y}`;
+  if (a.y === b.y) return `${day(a)} – ${day(b)} ${a.y}`;
+  return `${day(a)} ${a.y} – ${day(b)} ${b.y}`;
+}
+
+// The small marks after a date. `q` is the compact qualifier string the index
+// carries (b bracket, q question, a approx, < before, > after, | alternatives,
+// = editions disagree, c curated) or a full record with date_q/date_alt/date_curated.
+function sdDateMarks(q) {
+  let s = q;
+  if (q && typeof q === 'object') {
+    const set = new Set(q.date_q || []);
+    s = (set.has('bracket') ? 'b' : '') + (set.has('question') ? 'q' : '') + (set.has('approx') ? 'a' : '')
+      + (set.has('before') ? '<' : '') + (set.has('after') ? '>' : '') + ((set.has('alt') || set.has('between')) ? '|' : '')
+      + ((Array.isArray(q.date_alt) && q.date_alt.length) ? '=' : '') + (q.date_curated ? 'c' : '');
+  }
+  if (!s || typeof s !== 'string') return '';
+  const kinds = { b: 'bracket', q: 'question', a: 'approx', '<': 'before', '>': 'after', '|': 'alt' };
+  const reasons = [...s].filter(ch => kinds[ch]).map(ch => t('date.q.' + kinds[ch]));
+  const esc = (x) => String(x).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  let out = '';
+  if (reasons.length) out += `<span class="date-mark date-mark-q" title="${esc(t('date.uncertain') + ': ' + reasons.join('; '))}">?</span>`;
+  if (s.includes('=')) out += `<span class="date-mark date-mark-alt" title="${esc(t('date.differs'))}">≠</span>`;
+  if (s.includes('c')) out += `<span class="date-mark date-mark-c" title="${esc(t('date.curated'))}">✓</span>`;
+  return out;
+}
+if (typeof window !== 'undefined') { window.sdFormatDate = sdFormatDate; window.sdDateMarks = sdDateMarks; }

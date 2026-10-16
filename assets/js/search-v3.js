@@ -45,7 +45,7 @@ const STATE = {
 };
 
 // Core record column offsets
-const C = { id: 0, d: 1, r: 2, sdhk: 3, dd: 4, df: 5, src: 6, ds: 7, de: 8, rel: 9, di: 10 };
+const C = { id: 0, d: 1, r: 2, sdhk: 3, dd: 4, df: 5, src: 6, ds: 7, de: 8, rel: 9, di: 10, dq: 11 };
 
 // Test/debug hook
 window.__SD_STATE = STATE;
@@ -196,6 +196,7 @@ function coreLetter(idx) {
     dd: rec[C.dd] || null,
     df: rec[C.df] || null,
     di: rec[C.di] || null,
+    dq: rec[C.dq] || '',
     src: rec[C.src] || '',
     ds: rec[C.ds] || 0,   // ordinal int (YYYYMMDD) or 0
     de: rec[C.de] || 0,
@@ -267,6 +268,7 @@ function makePfHandle(pfResult) {
         dd: m.dd || null,
         df: m.df || null,
         di: m.di || null,
+        dq: m.dq || '',
         src: m.src || '',
         rel: m.rel ? JSON.parse(m.rel) : [],
         ds: m.ds || '',
@@ -849,14 +851,8 @@ function highlightQuery(text, query) {
 }
 
 function formatDateRange(start, end, original) {
-  if (original && String(original).trim()) {
-    const cleaned = String(original).trim().replace(/^0{4,}[;,]?\s*/g, '');
-    if (cleaned) return cleaned;
-  }
-  const ys = String(start || '').match(/^(\d{4})/)?.[1];
-  const ye = String(end || '').match(/^(\d{4})/)?.[1] || ys;
-  if (ys && ye) return ys === ye ? ys : `${ys}-${ye}`;
-  return ys || ye || TR('letter.unknown');
+  // one normalised form (assets/js/i18n.js); the edition's words only when there is no window
+  return sdFormatDate(start, end, original);
 }
 
 function toRoman(num) {
@@ -993,7 +989,7 @@ function renderCard(letter, query) {
       </div>
       <div class="letter-refs">${renderReferencesLine(letter)}</div>
       <div class="letter-meta" data-idx="${letter.i}">
-        <span class="letter-date">${escapeHtml(date)}</span>
+        <span class="letter-date">${escapeHtml(date)}${sdDateMarks(letter.dq)}</span>
         <span class="letter-place">${escapeHtml(place)}</span>
         <span class="letter-meta-expanded" style="display:none;"></span>
       </div>
@@ -1082,8 +1078,8 @@ async function loadAndShowDetails(idx, showingSourceIdx = null) {
       const refsEl = card.querySelector('.letter-refs');
       if (refsEl && LD.renderReferencesLine) refsEl.innerHTML = LD.renderReferencesLine(full);
       const dateEl = card.querySelector('.letter-date');
-      if (dateEl && LD.formatDateRange) {
-        dateEl.textContent = LD.formatDateRange(full.date_start, full.date_end, full.original_date || full.DN_dato || full.RN_dato);
+      if (dateEl) {
+        dateEl.innerHTML = escapeHtml(formatDateRange(full.date_start, full.date_end, full.original_date || full.DN_dato || full.RN_dato)) + sdDateMarks(full);
       }
       const placeEl = card.querySelector('.letter-place');
       if (placeEl && LD.getPlaceName) placeEl.textContent = LD.getPlaceName(full) || TR('letter.unknown.place');
@@ -1173,7 +1169,7 @@ async function updateCardWithSource(originalIdx, newSourceIdx) {
   const refsEl = card.querySelector('.letter-refs');
   if (refsEl) refsEl.innerHTML = renderReferencesLine(newCore);
   const dateEl = card.querySelector('.letter-date');
-  if (dateEl) dateEl.textContent = formatDateRange(full.date_start || ordToIso(newCore.ds), full.date_end || ordToIso(newCore.de), full.original_date || full.DN_dato || full.RN_dato);
+  if (dateEl) dateEl.innerHTML = escapeHtml(formatDateRange(full.date_start || ordToIso(newCore.ds), full.date_end || ordToIso(newCore.de), full.original_date || full.DN_dato || full.RN_dato)) + sdDateMarks(full.date_q ? full : newCore.dq);
   const placeEl = card.querySelector('.letter-place');
   if (placeEl) {
     placeEl.textContent = (full.Normalized_name && full.Normalized_name !== '[No_loc]' ? full.Normalized_name

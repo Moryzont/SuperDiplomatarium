@@ -68,6 +68,24 @@ function datesFromText(text) {
   return [Math.min(...ords), Math.max(...ords)];
 }
 
+// The edition's qualifiers on its dating as one short string for the cards:
+// b bracket (supplied by the editor), q question mark, a approximate, < before,
+// > after, | alternatives or between, = another edition dates the document
+// differently, c curated in the tool. '' when the dating is plain.
+function dateQualifiers(r) {
+  const q = new Set(r.date_q || []);
+  let s = '';
+  if (q.has('bracket')) s += 'b';
+  if (q.has('question')) s += 'q';
+  if (q.has('approx')) s += 'a';
+  if (q.has('before')) s += '<';
+  if (q.has('after')) s += '>';
+  if (q.has('alt') || q.has('between')) s += '|';
+  if (Array.isArray(r.date_alt) && r.date_alt.length) s += '=';
+  if (r.date_curated) s += 'c';
+  return s;
+}
+
 function letterDates(r) {
   let ds = isoToOrd(r.date_start, false);
   let de = isoToOrd(r.date_end, true);
@@ -161,6 +179,8 @@ function common(i, r) {
     ds: ordToIso(ds), de: ordToIso(de),
     c: String(score),   // completeness, so fuzzy result merging can keep that sort order
   };
+  const dq = dateQualifiers(r);
+  if (dq) meta.dq = dq;
   for (const [mk, rk] of [['d', 'DN_REF'], ['r', 'RN_REF'], ['sdhk', 'SDHK_REF'], ['dd', 'DD_REF'], ['df', 'DF_REF'], ['di', 'DI_REF']]) {
     if (r[rk]) meta[mk] = r[rk];
   }
@@ -224,7 +244,7 @@ async function main() {
       core.push([
         r.SD_ID, r.DN_REF || 0, r.RN_REF || 0, r.SDHK_REF || 0, r.DD_REF || 0, r.DF_REF || 0,
         r.source || 0, ds, de, r.related_sd_ids?.length ? r.related_sd_ids : 0,
-        r.DI_REF || 0,
+        r.DI_REF || 0, dateQualifiers(r) || 0,
       ]);
     }
     const coreOut = {
@@ -232,7 +252,7 @@ async function main() {
       generated: new Date().toISOString(),
       full_chunk_size: 100,
       n: core.length,
-      fields: ['id', 'd', 'r', 'sdhk', 'dd', 'df', 'src', 'ds', 'de', 'rel', 'di'],
+      fields: ['id', 'd', 'r', 'sdhk', 'dd', 'df', 'src', 'ds', 'de', 'rel', 'di', 'dq'],
       records: core,
     };
     fs.writeFileSync(path.join(OUT_DIR, 'core.json'), JSON.stringify(coreOut));
@@ -252,7 +272,7 @@ async function main() {
         r.SD_ID, r.DN_REF || 0, r.RN_REF || 0, r.SDHK_REF || 0, r.DD_REF || 0, r.DF_REF || 0,
         r.source || 0, ordToIso(ds) || 0, ordToIso(de) || 0,
         trunc(r.original_date || r.DN_dato || r.RN_dato || '', 60) || 0, placeOf(r) || 0,
-        r.DI_REF || 0,
+        r.DI_REF || 0, dateQualifiers(r) || 0,
       ]);
     }
     const mapOut = {
@@ -260,7 +280,7 @@ async function main() {
       generated: new Date().toISOString(),
       full_chunk_size: 100,
       n: rows.length,
-      fields: ['idx', 'la', 'lo', 'id', 'd', 'r', 'sdhk', 'dd', 'df', 'src', 'ds', 'de', 'od', 'p', 'di'],
+      fields: ['idx', 'la', 'lo', 'id', 'd', 'r', 'sdhk', 'dd', 'df', 'src', 'ds', 'de', 'od', 'p', 'di', 'dq'],
       records: rows,
     };
     fs.writeFileSync(path.join(OUT_DIR, 'map.json'), JSON.stringify(mapOut));
