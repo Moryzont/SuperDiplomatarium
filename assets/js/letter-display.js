@@ -122,7 +122,7 @@ function formatReference(ref, sourceKey) {
     if (m) {
       const vol = parseInt(m[1], 10);
       const num = parseInt(m[2], 10);
-      return `RN ${toRoman(vol)} nr. ${num}`;
+      return `RN ${toRoman(vol)}, ${num}`;      // the site's form, as for DN
     }
   }
 
