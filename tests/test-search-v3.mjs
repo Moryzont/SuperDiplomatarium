@@ -165,6 +165,8 @@ async function main() {
     const diSrc = await page.$eval('.letter-card', el => (el.querySelector('.letter-footer')?.textContent || '') + (el.querySelector('details.editorial')?.textContent || '')).catch(() => '');
     check('DI detail shows the source apparatus', /DI:/.test(diSrc), diSrc.slice(0, 80));
     const diCont = await page.$eval('.letter-card .letter-continuation', el => el.textContent).catch(() => '');
+    const diRefs = await page.$eval('.letter-card .letter-refs', el => el.textContent).catch(() => '');
+    check('DI card reference line shows the edition number', /DI [IVX]+ (Viðbætir )?nr\. \d+/.test(diRefs), diRefs);
     check('DI detail shows the register fold', /Register \(|Index \(/.test(diCont), diCont.slice(0, 80));
     const regClosed = await page.$eval('.letter-card details.register', el => !el.open).catch(() => null);
     check('register folded by default', regClosed === true, String(regClosed));

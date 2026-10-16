@@ -922,6 +922,7 @@ function renderReferencesLine(letter) {
   if (letter.sdhk) refs.push(formatRef(letter.sdhk, 'SDHK'));
   if (letter.dd) refs.push(formatRef(letter.dd, 'DD'));
   if (letter.df) refs.push(formatRef(letter.df, 'DF'));
+  if (letter.di) refs.push(formatRef(letter.di, 'DI'));
   if (!refs.length) return '';
   return `<span class="references">${escapeHtml(refs.filter(Boolean).join(' | '))}</span>`;
 }
