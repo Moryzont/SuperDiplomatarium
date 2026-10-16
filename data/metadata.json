@@ -23,6 +23,9 @@
     "date_start",
     "date_end",
     "original_date",
+    "date_q",
+    "date_alt",
+    "date_curated",
     "DN_sted",
     "RN_sted",
     "DD_sted",
@@ -48,5 +51,5 @@
   ],
   "synced_from": "store",
   "store": "/Users/vetlewisloffsandring/Documents/GitHub/superdiplomatarium-app/data/store/superdiplomatarium.db",
-  "synced_at": "2026-10-16T07:59:57+00:00"
+  "synced_at": "2026-10-16T09:34:24+00:00"
 }
