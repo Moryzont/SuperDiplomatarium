@@ -167,6 +167,24 @@ async function main() {
     check('DI detail shows register mentions', /Nevnte:|Mentioned:/.test(diCont), diCont.slice(0, 80));
     check('DI detail shows subject headings', /Emneord:|Subjects:/.test(diCont), '');
 
+    console.log('\n[DD letter: text, translation and editorial matter kept apart]');
+    r = await runSearch(page, { query: 'SD50007362', field: 'id' });
+    check('DD 3. rk. I nr. 1 found', r.count === 1, `count=${r.count}`);
+    await page.click('.letter-card .toggle-details');
+    await sleep(2500);
+    const ddState = await page.evaluate(() => {
+      const card = document.querySelector('.letter-card');
+      const blocks = [...card.querySelectorAll('.text-block-label')].map(e => e.textContent.trim());
+      const body = card.querySelector('.text-block-body')?.textContent || '';
+      return { blocks, bodyTail: body.trim().slice(-60), fold: !!card.querySelector('details.editorial'),
+               foldOpen: card.querySelector('details.editorial')?.open ?? null,
+               apparatusInFold: !!card.querySelector('details.editorial')?.textContent.includes('attingeritis') };
+    });
+    check('letter text and translation are separate blocks', ddState.blocks.length === 2, JSON.stringify(ddState.blocks));
+    check('apparatus no longer glued to the letter text', !/attigeritis/.test(ddState.bodyTail), ddState.bodyTail);
+    check('editorial matter folded by default', ddState.fold && ddState.foldOpen === false, JSON.stringify(ddState));
+    check('apparatus inside the fold', ddState.apparatusInFold, '');
+
     console.log('\n[RN register mentions]');
     r = await runSearch(page, { query: 'SD01007880', field: 'id' });
     check('RN 788 found', r.count === 1, `count=${r.count}`);
