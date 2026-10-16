@@ -14,9 +14,13 @@
   method: >-
     Filene er lest maskinelt: regest, brevtekst, kildeapparat («Kilde») og
     fotnoter er skilt ut felt for felt, og DN-nummer, dato og sted er
-    standardisert. Bindenes trykte person- og stedsregistre er ikke lest inn.
+    standardisert. Bindenes trykte navne- og sakregistre leses fra
+    Nasjonalbibliotekets OCR (nb.no) side for side; registrenes sidetall
+    knyttes til brevene på siden, og brevets egen tekst avgjør hvilket brev
+    på siden som menes. Bind I er lest inn.
   todo:
-    - Lese inn person- og stedsregistrene fra de trykte bindene (via nb.no) som register på brevene.
+    - Registrene i bind II–XXIII leses inn på samme måte som bind I.
+    - Registeroppslag som brevtekstene ikke bekrefter (en fjerdedel i bind I) står igjen for en ny gjennomgang.
     - Fullføre stedfestingen av brevene som ennå mangler koordinat.
     - Maskinoversettelse av brevtekstene til norsk.
 - key: RN
