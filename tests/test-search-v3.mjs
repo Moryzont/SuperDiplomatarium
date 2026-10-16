@@ -165,7 +165,14 @@ async function main() {
     check('DI detail shows the source apparatus', /DI:/.test(diFooter), diFooter.slice(0, 80));
     const diCont = await page.$eval('.letter-card .letter-continuation', el => el.textContent).catch(() => '');
     check('DI detail shows register mentions', /Nevnte:|Mentioned:/.test(diCont), diCont.slice(0, 80));
-    check('DI detail shows subject headings', /Emneord:|Subjects:/.test(diCont), '');
+    const diChips = await page.evaluate(() => {
+      const chips = [...document.querySelectorAll('.letter-card .nevnte .nevnt-chip')];
+      return { kinds: chips.map(c => c.className.match(/nevnt-(person|place|subject)/)?.[1]), titles: chips.slice(0, 2).map(c => c.title) };
+    });
+    const order = diChips.kinds.filter(Boolean);
+    const sortedOk = order.every((k, i) => i === 0 || ({person: 0, place: 1, subject: 2}[order[i - 1]] <= {person: 0, place: 1, subject: 2}[k]));
+    check('DI mentions sorted persons, places, subjects', order.length > 0 && sortedOk, order.slice(0, 8).join(','));
+    check('DI mention chips name their register', diChips.titles.every(t => /register/i.test(t)), JSON.stringify(diChips.titles));
 
     console.log('\n[DD letter: text, translation and editorial matter kept apart]');
     r = await runSearch(page, { query: 'SD50007362', field: 'id' });

@@ -626,29 +626,33 @@ function renderLetterDetails(full) {
   if (full.tekstapparat?.trim()) editorial.push(`<div class="detail-section"><em>Tekstapparat:</em> ${escapeHtml(full.tekstapparat).replace(/\n/g, '<br>')}</div>`);
   if (full.noter?.trim()) editorial.push(`<div class="detail-section"><em>Noter:</em> ${escapeHtml(full.noter).replace(/\n/g, '<br>')}</div>`);
 
-  // People and places mentioned in the letter (tagged in the curation tool
-  // or seeded from the edition's own register); the register's subject
-  // headings go on their own line, folded when there are many.
+  // Who and what the letter concerns — one list: persons first, then places,
+  // then the editors' subject headings. Each chip is coloured by where it
+  // comes from: an edition's register (the collection's colour, named in the
+  // tooltip) or a curator in the tool (olive). Long lists fold after 24.
   if (Array.isArray(full.nevnte) && full.nevnte.length > 0) {
+    const ORDER = { person: 0, place: 1, subject: 2 };
+    const srcKey = (m) => {
+      const mm = /^(DN|RN|DD|SDHK|DF|DI)\b/.exec(m.source || '');
+      return mm ? mm[1] : null;
+    };
     const chip = (m) => {
       const icon = m.kind === 'person' ? '●' : m.kind === 'subject' ? '◆' : m.region ? '▦' : '⌖';
       const label = escapeHtml(m.name || m.text);
-      if (m.kind === 'subject') return `<span class="nevnt-chip nevnt-emne">${icon} ${label}</span>`;
-      return (m.lat != null && m.lon != null)
-        ? `<span class="nevnt-chip" title="${m.lat}, ${m.lon}">${icon} ${label}</span>`
-        : `<span class="nevnt-chip nevnt-uplassert" title="${LT('letter.notPlaced')}">${icon} ${label}</span>`;
+      const key = srcKey(m);
+      const colour = key && SOURCES[key] ? SOURCES[key].color : null;
+      const from = key ? LT('letter.mentionFrom', { src: escapeHtml(m.source) }) : LT('letter.mentionCurated');
+      const where = (m.lat != null && m.lon != null) ? ` · ${m.lat}, ${m.lon}` : (m.kind === 'place' ? ` · ${LT('letter.notPlaced')}` : '');
+      const style = colour ? ` style="border-color:${colour};color:${colour}"` : '';
+      const cls = `nevnt-chip nevnt-${m.kind}${(m.kind === 'place' && m.lat == null) ? ' nevnt-uplassert' : ''}${key ? '' : ' nevnt-kuratert'}`;
+      return `<span class="${cls}"${style} title="${from}${where}">${icon} ${label}</span>`;
     };
-    const named = full.nevnte.filter(m => m.kind !== 'subject');
-    const subjects = full.nevnte.filter(m => m.kind === 'subject');
-    if (named.length) {
-      continuation += `<div class="detail-section"><em>${LT('letter.mentions')}</em> ${named.map(chip).join(' ')}</div>`;
-    }
-    if (subjects.length) {
-      const chips = subjects.map(chip).join(' ');
-      continuation += subjects.length > 12
-        ? `<div class="detail-section"><details class="nevnt-emner"><summary><em>${LT('letter.subjects')}</em> ${subjects.length}</summary>${chips}</details></div>`
-        : `<div class="detail-section"><em>${LT('letter.subjects')}</em> ${chips}</div>`;
-    }
+    const sorted = [...full.nevnte].sort((a, b) => (ORDER[a.kind] ?? 9) - (ORDER[b.kind] ?? 9));
+    const LIMIT = 24;
+    const shown = sorted.slice(0, LIMIT).map(chip).join(' ');
+    const rest = sorted.slice(LIMIT).map(chip).join(' ');
+    const more = rest ? ` <details class="nevnt-more"><summary>${LT('letter.mentionsMore', { n: sorted.length - LIMIT })}</summary>${rest}</details>` : '';
+    continuation += `<div class="detail-section nevnte"><em>${LT('letter.mentions')}</em> ${shown}${more}</div>`;
   }
 
   if (full.Tillegg?.trim()) editorial.push(`<div class="detail-section"><em>Tillegg:</em> ${escapeHtml(full.Tillegg).replace(/\n/g, '<br>')}</div>`);
