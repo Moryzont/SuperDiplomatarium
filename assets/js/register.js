@@ -53,7 +53,11 @@
     state.letter = letter;
     lettersEl.querySelectorAll('a').forEach(a => a.classList.toggle('active', a.dataset.letter === letter));
     statusEl.textContent = t('register.loading');
+    entriesEl.innerHTML = '';                       // the previous letter's entries go while this one loads
+    entriesEl.dataset.letter = '';
     const data = await B.fetchJson(`register/${file}`);
+    if (state.letter !== letter) return;            // the reader moved on meanwhile
+    entriesEl.dataset.letter = letter;
     state.entries = data.entries;
     renderEntries();
   }

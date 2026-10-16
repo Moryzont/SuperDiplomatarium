@@ -271,7 +271,7 @@ async function main() {
     check('register page lists the initial letters', reg.letters >= 25, String(reg.letters));
     check('register page shows the headwords of A', reg.entries > 1000, String(reg.entries));
     await page.click('#register-letters a[data-letter="M"]');
-    await page.waitForFunction(() => document.querySelector('#register-letters a.active')?.dataset.letter === 'M' && document.querySelectorAll('.reg-entry').length > 100, { timeout: 30000 }).catch(() => {});
+    await page.waitForFunction(() => document.getElementById('register-entries')?.dataset.letter === 'M' && document.querySelectorAll('.reg-entry').length > 100, { timeout: 30000 }).catch(() => {});
     await page.evaluate(() => { const f = document.getElementById('register-filter'); f.value = 'Magnus Eriksson'; f.dispatchEvent(new Event('input')); });
     await sleep(300);
     const regM = await page.evaluate(() => ({ n: document.querySelectorAll('.reg-entry').length, first: document.querySelector('.reg-entry .reg-name')?.textContent || '' }));
