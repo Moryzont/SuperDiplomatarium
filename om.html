@@ -9,16 +9,55 @@ permalink: /om/
 
   <section class="about-intro">
     <p class="lead">
-      SuperDiplomatarium er en portal for diplomdata. Her har jeg samlet sammen diplomer og regester fra 
-      Diplomatarium Norvegicum og Regesta Norvegica. Disse er blitt koblet sammen og jeg har standardisert 
-      datafeltene slik at de skal bli lettere å bruke for forskere, lærere, studenter og andre med interesse 
-      for middelalderhistorie.
+      SuperDiplomatarium er en portal for diplomdata. Her har jeg samlet sammen diplomer og regester fra
+      Diplomatarium Norvegicum, Regesta Norvegica, Diplomatarium Danicum, Svenskt Diplomatariums
+      huvudkartotek, Diplomatarium Fennicum og Diplomatarium Islandicum. Brev som finnes i flere av
+      samlingene er koblet sammen, og datafeltene er standardisert slik at de skal bli lettere å bruke for
+      forskere, lærere, studenter og andre med interesse for middelalderhistorie.
     </p>
     
     <p class="warning-box">
       <strong>Viktig:</strong> Når du bruker denne portalen er det viktig å være klar over begrensningene 
       som ligger i materialet.
     </p>
+  </section>
+
+  <section class="about-section" id="samlingene">
+    <h2>Samlingene</h2>
+    <p class="coll-lead">
+      Hver samling er hentet inn på sin måte, og de er ulikt komplette. Stolpene viser hvor stor del av
+      brevene i samlingen som har hvert felt på dette nettstedet; tallene regnes ut fra datasettet ved hver
+      publisering. Under hver samling står det som gjenstår.
+    </p>
+    {% for c in site.data.collections %}
+    <article class="coll-card" data-key="{{ c.key }}" style="--coll: {{ c.color }}">
+      <header class="coll-head">
+        <span class="source-badge" style="background-color: {{ c.color }}">{{ c.short }}</span>
+        <h3>{{ c.name }}</h3>
+        <span class="coll-span">{{ c.span }}</span>
+        <span class="coll-count" data-stat="records"></span>
+      </header>
+      <p><strong>Kilde:</strong> {{ c.source }}</p>
+      <p><strong>Slik er den hentet inn:</strong> {{ c.method }}</p>
+      <div class="cov" aria-label="Dekning per felt">
+        <div class="cov-row" data-stat="summary"><span class="cov-label">Regest</span><span class="cov-bar"><span class="cov-fill"></span></span><span class="cov-num"></span></div>
+        <div class="cov-row" data-stat="body"><span class="cov-label">Brevtekst</span><span class="cov-bar"><span class="cov-fill"></span></span><span class="cov-num"></span></div>
+        <div class="cov-row" data-stat="translation"><span class="cov-label">Oversettelse</span><span class="cov-bar"><span class="cov-fill"></span></span><span class="cov-num"></span></div>
+        <div class="cov-row" data-stat="sourceApparatus"><span class="cov-label">Kildeapparat</span><span class="cov-bar"><span class="cov-fill"></span></span><span class="cov-num"></span></div>
+        <div class="cov-row" data-stat="apparatus"><span class="cov-label">Tekstapparat</span><span class="cov-bar"><span class="cov-fill"></span></span><span class="cov-num"></span></div>
+        <div class="cov-row" data-stat="footnotes"><span class="cov-label">Fotnoter</span><span class="cov-bar"><span class="cov-fill"></span></span><span class="cov-num"></span></div>
+        <div class="cov-row" data-stat="dated"><span class="cov-label">Datert</span><span class="cov-bar"><span class="cov-fill"></span></span><span class="cov-num"></span></div>
+        <div class="cov-row" data-stat="placed"><span class="cov-label">Stedfestet (koordinat)</span><span class="cov-bar"><span class="cov-fill"></span></span><span class="cov-num"></span></div>
+        <div class="cov-row" data-stat="mentions"><span class="cov-label">Register (personer, steder, emner)</span><span class="cov-bar"><span class="cov-fill"></span></span><span class="cov-num"></span></div>
+        <div class="cov-row" data-stat="linked"><span class="cov-label">Koblet til andre samlinger</span><span class="cov-bar"><span class="cov-fill"></span></span><span class="cov-num"></span></div>
+      </div>
+      <div class="coll-todo">
+        <strong>Gjenstår:</strong>
+        <ul>{% for t in c.todo %}<li>{{ t }}</li>{% endfor %}</ul>
+      </div>
+    </article>
+    {% endfor %}
+    <p class="coll-generated"></p>
   </section>
 
   <section class="about-section">
@@ -307,3 +346,59 @@ permalink: /om/
     }
   }
 </style>
+
+<style>
+  .coll-lead { color: #444; line-height: 1.6; margin-bottom: 1.5rem; }
+  .coll-card { border: 1px solid #e0e0e0; border-left: 4px solid var(--coll, #7a8e74); border-radius: 6px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; background: #fff; }
+  .coll-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem .75rem; margin-bottom: .5rem; }
+  .coll-head h3 { margin: 0; font-size: 1.15rem; color: #2c3e50; }
+  .coll-head .source-badge { color: #fff; padding: .1rem .5rem; border-radius: 4px; font-size: .8rem; font-weight: 600; }
+  .coll-span { color: #666; font-size: .9rem; }
+  .coll-count { margin-left: auto; color: #2c3e50; font-weight: 600; font-size: .95rem; }
+  .coll-card p { margin: .4rem 0; line-height: 1.55; color: #444; }
+  .cov { margin: .9rem 0 .6rem; }
+  .cov-row { display: grid; grid-template-columns: 15rem 1fr 7.5rem; align-items: center; gap: .6rem; font-size: .9rem; margin: .22rem 0; }
+  .cov-label { color: #444; }
+  .cov-bar { display: block; height: .7rem; background: #eef0ea; border-radius: 999px; overflow: hidden; }
+  .cov-fill { display: block; height: 100%; width: 0; background: var(--coll, #7a8e74); border-radius: 999px; transition: width .6s ease; }
+  .cov-num { color: #555; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  .cov-row.cov-none .cov-label, .cov-row.cov-none .cov-num { color: #999; }
+  .coll-todo { margin-top: .6rem; color: #444; line-height: 1.55; }
+  .coll-todo ul { margin: .25rem 0 0 1.25rem; padding: 0; }
+  .coll-generated { color: #777; font-size: .85rem; }
+  @media (max-width: 600px) {
+    .cov-row { grid-template-columns: 1fr; gap: .15rem; margin: .45rem 0; }
+    .cov-num { text-align: left; }
+    .coll-count { margin-left: 0; }
+  }
+</style>
+
+<script>
+  // Fill the coverage bars from data/v3/collections.json (built from the
+  // letter chunks at every publication); the words on the cards come from
+  // _data/collections.yml.
+  (function () {
+    const BASE = (window.SITE_BASE || '{{ site.baseurl }}').replace(/\/+$/, '');
+    const fmt = (n) => Number(n).toLocaleString('nb-NO');
+    fetch(`${BASE}/data/v3/collections.json`).then(r => r.ok ? r.json() : null).then(data => {
+      if (!data || !data.collections) return;
+      document.querySelectorAll('.coll-card').forEach(card => {
+        const st = data.collections[card.dataset.key];
+        if (!st) return;
+        const n = st.records || 0;
+        const count = card.querySelector('.coll-count');
+        if (count) count.textContent = `${fmt(n)} brev${st.yearMin && st.yearMax ? ` · ${st.yearMin}–${st.yearMax}` : ''}`;
+        card.querySelectorAll('.cov-row').forEach(row => {
+          const v = st[row.dataset.stat] || 0;
+          const pct = n ? Math.round(1000 * v / n) / 10 : 0;
+          row.querySelector('.cov-fill').style.width = `${Math.min(100, pct)}%`;
+          row.querySelector('.cov-num').textContent = `${fmt(v)} (${pct.toLocaleString('nb-NO')} %)`;
+          row.classList.toggle('cov-none', v === 0);
+        });
+      });
+      const gen = document.querySelector('.coll-generated');
+      if (gen && data.generated) gen.textContent = `Tallene er regnet ut ${new Date(data.generated).toLocaleDateString('nb-NO', { year: 'numeric', month: 'long', day: 'numeric' })}.`;
+    }).catch(() => {});
+  })();
+</script>
+

@@ -287,6 +287,40 @@ async function main() {
     console.log(`[map] done: ${rows.length} geo-tagged letters, ${(fs.statSync(path.join(OUT_DIR, 'map.json')).size / 1e6).toFixed(1)} MB`);
   }
 
+  // 5b. Collection statistics for the "Om samlingen" page: per collection, how
+  //     many records carry each field, so the page can draw what is there and
+  //     what is still to do. Counts come from the chunks, nothing is typed in.
+  if (wants('stats')) {
+    const stats = {};
+    const touch = (k) => stats[k] || (stats[k] = { records: 0, summary: 0, body: 0, translation: 0, apparatus: 0, sourceApparatus: 0, footnotes: 0, notes: 0,
+      dated: 0, dateUncertain: 0, placeString: 0, placed: 0, placeUncertain: 0, mentions: 0, subjects: 0, crossRefs: 0, linked: 0, yearMin: 9999, yearMax: 0 });
+    for (const [, r] of loadLetters()) {
+      const st = touch(r.source || 'unknown');
+      st.records++;
+      if ((r.sammendrag || r.regest || '').trim()) st.summary++;
+      if ((r.brevtekst || '').trim()) st.body++;
+      if ((r.oversettelse || '').trim()) st.translation++;
+      if ((r.tekstapparat || '').trim()) st.apparatus++;
+      if ((r[`${r.source}_source`] || '').trim()) st.sourceApparatus++;
+      if ((r.fotnoter || '').trim()) st.footnotes++;
+      if ((r.noter || '').trim()) st.notes++;
+      const [ds, de] = letterDates(r);
+      if (ds) { st.dated++; const y0 = Math.floor(ds / 10000), y1 = Math.floor((de || ds) / 10000); if (y0 < st.yearMin) st.yearMin = y0; if (y1 > st.yearMax) st.yearMax = y1; }
+      if (Array.isArray(r.date_q) && r.date_q.length) st.dateUncertain++;
+      if (placeOf(r)) st.placeString++;
+      if (Number.isFinite(r.lat) && Number.isFinite(r.lon)) st.placed++;
+      if (r.uncertain_loc) st.placeUncertain++;
+      const nev = Array.isArray(r.nevnte) ? r.nevnte : [];
+      if (nev.length) st.mentions++;
+      if (nev.some(m => m.kind === 'subject')) st.subjects++;
+      if (Array.isArray(r.cross_references) && r.cross_references.length) st.crossRefs++;
+      if (Array.isArray(r.related_sd_ids) && r.related_sd_ids.length) st.linked++;
+    }
+    const out = { generated: new Date().toISOString(), collections: stats };
+    fs.writeFileSync(path.join(OUT_DIR, 'collections.json'), JSON.stringify(out));
+    console.log(`[stats] done: ${Object.keys(stats).length} collections -> data/v3/collections.json`);
+  }
+
   // 6. Full-record store: data/optimized/full-XX.json, 500 letters per chunk.
   //    Runtime contract: letter at global index i lives in full-{floor(i/500)}.json
   //    and carries its index as `i`. (Replaces the retired optimize-data.js.)

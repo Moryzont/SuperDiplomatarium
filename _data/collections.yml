@@ -1,0 +1,98 @@
+# The collections, as presented on "Om samlingen" (om.html). The numbers on
+# the page come from data/v3/collections.json (built from the letter chunks
+# by scripts/build-search-v3.mjs); this file holds the words: where each
+# collection comes from, how it was brought in, and what is still to do.
+# Keys match the `source` field of the records.
+- key: DN
+  name: Diplomatarium Norvegicum
+  short: DN
+  color: "#5c6d4a"
+  span: "Bind I–XXIII (1847–2011), brev til 1570"
+  source: >-
+    Dokumentasjonsprosjektets digitale utgave ved Universitetet i Oslo
+    (SGML-filene bak dokpro.uio.no).
+  method: >-
+    Filene er lest maskinelt: regest, brevtekst, kildeapparat («Kilde») og
+    fotnoter er skilt ut felt for felt, og DN-nummer, dato og sted er
+    standardisert. Bindenes trykte person- og stedsregistre er ikke lest inn.
+  todo:
+    - Lese inn person- og stedsregistrene fra de trykte bindene (via nb.no) som register på brevene.
+    - Fullføre stedfestingen av brevene som ennå mangler koordinat.
+    - Maskinoversettelse av brevtekstene til norsk.
+- key: RN
+  name: Regesta Norvegica
+  short: RN
+  color: "#6b8e7a"
+  span: "Bind I–X (1989–2015), regester 822–1430"
+  source: >-
+    Dokumentasjonsprosjektets regestbase (dokpro.uio.no), inkludert det
+    samlede navne- og sakregisteret.
+  method: >-
+    Regestene er hentet med bind- og regestnummer, datert og stedfestet etter
+    RNs egen datering. Registeret (60 680 oppslagsord) er lest inn som
+    register på brevene: personer, steder og emneord. Regestene er koblet til
+    DN-brevene de bygger på.
+  todo:
+    - Koble de regestene som ennå står uten DN-brev.
+    - Registerets underoppslag (strekoppføringene) er slått sammen med hovedoppslaget og bør skilles ut.
+- key: DD
+  name: Diplomatarium Danicum
+  short: DD
+  color: "#8b5a5a"
+  span: "1. række (789–) til og med 1450"
+  source: >-
+    Det Danske Sprog- og Litteraturselskabs TEI-utgave (github.com/dsldk/diplomatarium-danicum),
+    med de gamle person-, steds- og sakregistrene fra diplomatarium.dk.
+  method: >-
+    TEI-filene er omsatt til regest, brevtekst, oversettelse, tekstapparat og
+    fotnoter; vitnebeskrivelsene bygges av de strukturerte feltene. Registrene
+    (10 379 oppslagsord, hovedsakelig 1401–1450) er lest inn som register.
+  todo:
+    - Registrene dekker bare 1401–1450; brevene før 1401 står uten register.
+    - Trykt DD-nummer mangler for en del av de nettpubliserte brevene.
+- key: SDHK
+  name: Svenskt Diplomatariums huvudkartotek
+  short: SDHK
+  color: "#8b7355"
+  span: "Brev til 1540"
+  source: >-
+    Riksarkivets eksport av huvudkartoteket (november 2024), med brevtekst
+    der Diplomatarium Suecanum er trykt.
+  method: >-
+    Regest, brevtekst, vitner, trykk, segl og kommentarer er hentet fra
+    eksporten felt for felt. Eksporten mangler utgavens tekstapparat og
+    fotnoter, og erstatter utgavens skilletegn «·» med «?».
+  todo:
+    - Tekstapparat og fotnoter finnes bare i de skannede sidene av Diplomatarium Suecanum (pdf hos Riksarkivet); må leses inn fra bildene.
+    - Regestene i den trykte utgaven etter 1401 er fyldigere enn kartotekets.
+    - Stedfesting og register.
+- key: DF
+  name: Diplomatarium Fennicum
+  short: DF
+  color: "#5a7a6b"
+  span: "Brev til 1530"
+  source: >-
+    Kansallisarkistos Diplomatarium Fennicum (df.kansallisarkisto.fi).
+  method: >-
+    Regest, brevtekst og kildeopplysninger er hentet fra tjenesten brev for
+    brev, med tjenestens egne stedsangivelser og koordinater. Brevene er
+    koblet til SDHK der de samme brevene finnes der.
+  todo:
+    - Register (personer og steder) finnes ikke i tjenesten.
+    - Datering og stedfesting følger tjenesten; ikke gjennomgått.
+- key: DI
+  name: Diplomatarium Islandicum
+  short: DI
+  color: "#6a6e8c"
+  span: "16 bind (1857–1972), brev 834–1570"
+  source: >-
+    De trykte bindene (skanninger), lest av språkmodeller side for side.
+  method: >-
+    Hver side er transkribert, brevene er skilt ut med nummer, dato, sted,
+    regest, brevtekst, kildeapparat og fotnoter, og tallene er kontrollert mot
+    bindets innholdsfortegnelse. Bindenes registre er lest inn som register
+    på brevene. Bind I og II er ferdige.
+  todo:
+    - Bind III–XVI gjenstår (XII–XVI har uavklarte rettigheter).
+    - Transkripsjonene bør stikkprøves av en historiker mot skanningene.
+    - Stedfesting av brevene.

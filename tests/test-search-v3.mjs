@@ -222,6 +222,21 @@ async function main() {
     const rawDates = await page.$$eval('.letter-card .letter-date', els => els.map(e => e.textContent).filter(t => /[\[\]]/.test(t)));
     check('no card prints an edition string with brackets', rawDates.length === 0, rawDates.slice(0, 3).join(' | '));
 
+    console.log('\n[Om samlingen: the collections and their coverage]');
+    await page.goto(`${BASE}/om/`, { waitUntil: 'networkidle2' });
+    await page.waitForFunction(() => document.querySelector('.coll-card[data-key="DN"] .coll-count')?.textContent.includes('brev'), { timeout: 20000 }).catch(() => {});
+    const om = await page.evaluate(() => ({
+      cards: document.querySelectorAll('.coll-card').length,
+      dnCount: document.querySelector('.coll-card[data-key="DN"] .coll-count')?.textContent || '',
+      dnBody: document.querySelector('.coll-card[data-key="DN"] .cov-row[data-stat="body"] .cov-fill')?.style.width || '',
+      diTodo: document.querySelector('.coll-card[data-key="DI"] .coll-todo li')?.textContent || '',
+    }));
+    check('six collection cards', om.cards === 6, String(om.cards));
+    check('DN card shows its record count and span', /\d.*brev.*\d{3,4}–\d{3,4}/.test(om.dnCount), om.dnCount);
+    check('coverage bars are filled from collections.json', parseFloat(om.dnBody) > 90, om.dnBody);
+    check('to-do list rendered from _data/collections.yml', om.diTodo.length > 10, om.diTodo.slice(0, 60));
+    await page.goto(`${BASE}/sok/`, { waitUntil: 'networkidle2' });
+
     console.log('\n[RN register mentions]');
     r = await runSearch(page, { query: 'SD01007880', field: 'id' });
     check('RN 788 found', r.count === 1, `count=${r.count}`);
