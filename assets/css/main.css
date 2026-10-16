@@ -2127,9 +2127,6 @@ mark {
 .nevnt-chip { display: inline-block; padding: .05rem .5rem; margin: .1rem; border: 1px solid var(--c-olive); border-radius: 999px; font-size: .85rem; }
 .nevnt-chip.nevnt-subject { border-style: dashed; }
 .nevnt-chip.nevnt-kuratert { background: rgba(92,109,74,.08); }
-.nevnt-more { display: inline; }
-.nevnt-more > summary { display: inline-block; cursor: pointer; font-size: .85rem; color: var(--c-olive, #5c6d4a); padding: .05rem .5rem; }
-.nevnt-more[open] > summary { display: block; margin: .2rem 0; }
 .nevnt-uplassert { opacity: .55; border-style: dashed; }
 
 /* ---------- Phones: search options (last, so it wins over the tablet rules above) ---------- */
@@ -2205,8 +2202,9 @@ mark {
 .text-block-label { font-style: italic; color: var(--c-olive, #5c6d4a); margin-bottom: .15rem; }
 .text-block-body { line-height: 1.45; }
 .dd-mark { color: #b5ad9a; font-size: .7em; vertical-align: .15em; }
-details.editorial > summary { cursor: pointer; font-style: italic; color: var(--c-olive, #5c6d4a); }
-details.editorial > summary .editorial-count { font-style: normal; font-size: .8em; opacity: .7; margin-left: .25rem; }
-details.editorial[open] > summary { margin-bottom: .35rem; }
+details.register > summary, details.editorial > summary { cursor: pointer; font-style: italic; color: var(--c-olive, #5c6d4a); }
+details.register > summary .editorial-count, details.editorial > summary .editorial-count { font-style: normal; font-size: .8em; opacity: .7; margin-left: .25rem; }
+details.editorial[open] > summary, details.register[open] > summary { margin-bottom: .35rem; }
+.register-chips { margin-left: .5rem; }
 details.editorial .detail-section { margin-left: .5rem; }
 

@@ -165,9 +165,12 @@ async function main() {
     const diSrc = await page.$eval('.letter-card', el => (el.querySelector('.letter-footer')?.textContent || '') + (el.querySelector('details.editorial')?.textContent || '')).catch(() => '');
     check('DI detail shows the source apparatus', /DI:/.test(diSrc), diSrc.slice(0, 80));
     const diCont = await page.$eval('.letter-card .letter-continuation', el => el.textContent).catch(() => '');
-    check('DI detail shows register mentions', /Nevnte:|Mentioned:/.test(diCont), diCont.slice(0, 80));
+    check('DI detail shows the register fold', /Register \(|Index \(/.test(diCont), diCont.slice(0, 80));
+    const regClosed = await page.$eval('.letter-card details.register', el => !el.open).catch(() => null);
+    check('register folded by default', regClosed === true, String(regClosed));
+    await page.$eval('.letter-card details.register', el => { el.open = true; });
     const diChips = await page.evaluate(() => {
-      const chips = [...document.querySelectorAll('.letter-card .nevnte .nevnt-chip')];
+      const chips = [...document.querySelectorAll('.letter-card details.register .nevnt-chip')];
       return { kinds: chips.map(c => c.className.match(/nevnt-(person|place|subject)/)?.[1]), titles: chips.slice(0, 2).map(c => c.title) };
     });
     const order = diChips.kinds.filter(Boolean);
@@ -199,7 +202,7 @@ async function main() {
     await page.click('.letter-card .toggle-details');
     await sleep(2500);
     const rnCont = await page.$eval('.letter-card .letter-continuation', el => el.textContent).catch(() => '');
-    check('RN detail shows register mentions', /Nevnte:|Mentioned:/.test(rnCont), rnCont.slice(0, 80));
+    check('RN detail shows the register fold', /Register \(|Index \(/.test(rnCont), rnCont.slice(0, 80));
 
     console.log('\n[detail expansion]');
     r = await runSearch(page, { query: 'jordegods', field: 'text' });

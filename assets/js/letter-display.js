@@ -626,10 +626,9 @@ function renderLetterDetails(full) {
   if (full.tekstapparat?.trim()) editorial.push(`<div class="detail-section"><em>Tekstapparat:</em> ${escapeHtml(full.tekstapparat).replace(/\n/g, '<br>')}</div>`);
   if (full.noter?.trim()) editorial.push(`<div class="detail-section"><em>Noter:</em> ${escapeHtml(full.noter).replace(/\n/g, '<br>')}</div>`);
 
-  // Who and what the letter concerns — one list: persons first, then places,
-  // then the editors' subject headings. Each chip is coloured by where it
-  // comes from: an edition's register (the collection's colour, named in the
-  // tooltip) or a curator in the tool (olive). Long lists fold after 24.
+  // The editions' registers: persons first, then places, then subject
+  // headings, each chip coloured by the collection whose register it comes
+  // from (named in the tooltip). Folded by default, like the editorial matter.
   if (Array.isArray(full.nevnte) && full.nevnte.length > 0) {
     const ORDER = { person: 0, place: 1, subject: 2 };
     const srcKey = (m) => {
@@ -642,17 +641,13 @@ function renderLetterDetails(full) {
       const key = srcKey(m);
       const colour = key && SOURCES[key] ? SOURCES[key].color : null;
       const from = key ? LT('letter.mentionFrom', { src: escapeHtml(m.source) }) : LT('letter.mentionCurated');
-      const where = (m.lat != null && m.lon != null) ? ` · ${m.lat}, ${m.lon}` : (m.kind === 'place' ? ` · ${LT('letter.notPlaced')}` : '');
+      const where = (m.lat != null && m.lon != null) ? ` · ${m.lat}, ${m.lon}` : '';
       const style = colour ? ` style="border-color:${colour};color:${colour}"` : '';
-      const cls = `nevnt-chip nevnt-${m.kind}${(m.kind === 'place' && m.lat == null) ? ' nevnt-uplassert' : ''}${key ? '' : ' nevnt-kuratert'}`;
+      const cls = `nevnt-chip nevnt-${m.kind}${key ? '' : ' nevnt-kuratert'}`;
       return `<span class="${cls}"${style} title="${from}${where}">${icon} ${label}</span>`;
     };
     const sorted = [...full.nevnte].sort((a, b) => (ORDER[a.kind] ?? 9) - (ORDER[b.kind] ?? 9));
-    const LIMIT = 24;
-    const shown = sorted.slice(0, LIMIT).map(chip).join(' ');
-    const rest = sorted.slice(LIMIT).map(chip).join(' ');
-    const more = rest ? ` <details class="nevnt-more"><summary>${LT('letter.mentionsMore', { n: sorted.length - LIMIT })}</summary>${rest}</details>` : '';
-    continuation += `<div class="detail-section nevnte"><em>${LT('letter.mentions')}</em> ${shown}${more}</div>`;
+    continuation += `<div class="detail-section nevnte"><details class="register"><summary>${LT('letter.mentions')} <span class="editorial-count">${sorted.length}</span></summary><div class="register-chips">${sorted.map(chip).join(' ')}</div></details></div>`;
   }
 
   if (full.Tillegg?.trim()) editorial.push(`<div class="detail-section"><em>Tillegg:</em> ${escapeHtml(full.Tillegg).replace(/\n/g, '<br>')}</div>`);
