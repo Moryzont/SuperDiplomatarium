@@ -672,7 +672,11 @@ function renderLetterDetails(full) {
   if (diSource && usedFallback !== 'DI_source') sources.push(`<div class="source-item"><span class="source-label">DI:</span> ${escapeHtml(diSource)}</div>`);
 
   if (sources.length > 0) {
-    footer += `<div class="detail-section"><em>${LT('letter.sources')}</em><div class="source-list">${sources.join('')}</div></div>`;
+    // A short bibliographic line stays in view; a long one (DI's editor
+    // introductions run to pages) joins the editorial fold.
+    const sourcesHtml = `<div class="detail-section"><em>${LT('letter.sources')}</em><div class="source-list">${sources.join('')}</div></div>`;
+    const sourcesLen = [full.DN_source, full.RN_source, ddSource, sdhkSource, dfSource, diSource].filter(Boolean).join('').length;
+    if (sourcesLen > 600) editorial.unshift(sourcesHtml); else footer += sourcesHtml;
   }
 
   // Footnotes
@@ -683,6 +687,7 @@ function renderLetterDetails(full) {
     }
     editorial.push(`<div class="detail-section"><em>${LT('letter.footnotes')}</em><div class="footnotes-list">${fnItems.join('')}</div></div>`);
   }
+
   if (editorial.length) {
     continuation += `<div class="detail-section"><details class="editorial"><summary>${LT('letter.editorial')} <span class="editorial-count">${editorial.length}</span></summary>${editorial.join('')}</details></div>`;
   }
