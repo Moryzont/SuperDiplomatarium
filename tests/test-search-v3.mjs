@@ -264,6 +264,40 @@ async function main() {
     const marks = await page.$$eval('.letter-card .letter-content mark', els => els.length);
     check('search word marked in the expanded details', marks >= 1, `marks=${marks}`);
 
+    console.log('\n[Register page and timeline page]');
+    await page.goto(`${BASE_URL}/register/`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForSelector('.reg-entry', { timeout: 30000 }).catch(() => {});
+    const reg = await page.evaluate(() => ({ letters: document.querySelectorAll('#register-letters a').length, entries: document.querySelectorAll('.reg-entry').length, first: document.querySelector('.reg-entry .reg-name')?.textContent || '' }));
+    check('register page lists the initial letters', reg.letters >= 25, String(reg.letters));
+    check('register page shows the headwords of A', reg.entries > 1000, String(reg.entries));
+    await page.click('#register-letters a[data-letter="M"]');
+    await page.waitForFunction(() => document.querySelector('#register-letters a.active')?.dataset.letter === 'M' && document.querySelectorAll('.reg-entry').length > 100, { timeout: 30000 }).catch(() => {});
+    await page.evaluate(() => { const f = document.getElementById('register-filter'); f.value = 'Magnus Eriksson'; f.dispatchEvent(new Event('input')); });
+    await sleep(300);
+    const regM = await page.evaluate(() => ({ n: document.querySelectorAll('.reg-entry').length, first: document.querySelector('.reg-entry .reg-name')?.textContent || '' }));
+    check('filter within a letter narrows the headwords', regM.n > 0 && regM.n < 100 && /Magnus Eriksson/.test(regM.first), JSON.stringify(regM));
+    await page.click('.reg-entry .reg-head');
+    await page.waitForSelector('.reg-entry.open .letter-card', { timeout: 30000 }).catch(() => {});
+    const regCards = await page.evaluate(() => document.querySelectorAll('.reg-entry.open .letter-card').length);
+    check('opening a headword lists its letters as cards', regCards >= 1, String(regCards));
+    await page.click('.reg-entry.open .letter-card .toggle-details');
+    await sleep(2500);
+    const regDetail = await page.evaluate(() => (document.querySelector('.reg-entry.open .letter-card .letter-footer')?.textContent || '').length);
+    check('a card on the register page expands', regDetail > 20, String(regDetail));
+
+    await page.goto(`${BASE_URL}/tidslinje/`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForSelector('#tl-chart rect.tl-bar', { timeout: 30000 }).catch(() => {});
+    const bars = await page.evaluate(() => document.querySelectorAll('#tl-chart rect.tl-bar').length);
+    check('timeline draws bars', bars > 50, String(bars));
+    await page.goto(`${BASE_URL}/tidslinje/?fra=1300&til=1302`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForSelector('#tl-letters .letter-card', { timeout: 30000 }).catch(() => {});
+    const tl = await page.evaluate(() => ({ status: document.getElementById('tl-status')?.textContent || '', cards: document.querySelectorAll('#tl-letters .letter-card').length, firstDate: document.querySelector('#tl-letters .letter-card .letter-date')?.textContent || '' }));
+    check('a span in the URL lists its letters', tl.cards >= 10 && /1300–1302/.test(tl.status), JSON.stringify(tl).slice(0, 120));
+    check('timeline letters start in the span', /130[0-2]/.test(tl.firstDate), tl.firstDate);
+    await page.goto(`${BASE_URL}/sok/`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForSelector('#search-btn', { timeout: 30000 });
+    await sleep(1500);
+
     console.log('\n[RN register mentions]');
     r = await runSearch(page, { query: 'SD01007880', field: 'id' });
     check('RN 788 found', r.count === 1, `count=${r.count}`);

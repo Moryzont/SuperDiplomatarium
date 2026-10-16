@@ -1,0 +1,58 @@
+---
+layout: default
+title: Register
+permalink: /register/
+---
+
+<div class="register-container">
+  <h1 data-i18n="register.title">Register</h1>
+  <p class="register-lead" data-i18n="register.lead">Utgavenes registre, samlet: personer, steder og emneord slik utgiverne førte dem opp, med brevene hvert oppslag viser til. Velg en bokstav, bla, og åpne brevene rett fra oppslaget.</p>
+
+  <nav class="register-letters" id="register-letters" aria-label="Bokstaver"></nav>
+
+  <div class="register-tools">
+    <div class="register-kinds" id="register-kinds" role="group">
+      <button type="button" class="btn-secondary active" data-kind="all" data-i18n="register.kind.all">Alle</button>
+      <button type="button" class="btn-secondary" data-kind="person" data-i18n="register.kind.person">Personer</button>
+      <button type="button" class="btn-secondary" data-kind="place" data-i18n="register.kind.place">Steder</button>
+      <button type="button" class="btn-secondary" data-kind="subject" data-i18n="register.kind.subject">Emneord</button>
+    </div>
+    <input type="search" id="register-filter" class="register-filter" data-i18n-placeholder="register.filter" placeholder="Søk i bokstaven …" autocomplete="off">
+    <span id="register-status" class="register-status"></span>
+  </div>
+
+  <div id="register-entries" class="register-entries"></div>
+</div>
+
+<style>
+  .register-container { max-width: 1100px; margin: 0 auto; }
+  .register-lead { color: #444; line-height: 1.6; max-width: 70ch; }
+  .register-letters { display: flex; flex-wrap: wrap; gap: .25rem; margin: 1rem 0; }
+  .register-letters a { display: inline-block; min-width: 2.1rem; text-align: center; padding: .25rem .4rem; border: 1px solid var(--c-olive); border-radius: 6px; color: var(--c-dark); text-decoration: none; font-family: "EB Garamond", Georgia, serif; font-size: 1.1rem; }
+  .register-letters a.active, .register-letters a:hover { background: var(--c-olive); color: #fff; }
+  .register-letters a small { display: block; font-size: .65rem; opacity: .75; }
+  .register-tools { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .5rem 0 1rem; }
+  .register-kinds button { margin-right: .25rem; }
+  .register-kinds button.active { background: var(--c-olive); color: #fff; }
+  .register-filter { flex: 1; min-width: 12rem; padding: .4rem .6rem; border: 1px solid var(--c-olive); border-radius: 6px; font-size: 1rem; }
+  .register-status { color: var(--c-olive); white-space: nowrap; }
+  /* the index itself: two columns of entries, as on a printed register page */
+  .register-entries { column-count: 2; column-gap: 2.5rem; font-family: "EB Garamond", Georgia, "Times New Roman", serif; }
+  .reg-entry { break-inside: avoid; margin: 0 0 .15rem; line-height: 1.45; }
+  .reg-entry.open { column-span: all; margin: .5rem 0 1rem; }
+  .reg-head { display: inline; cursor: pointer; }
+  .reg-head:hover .reg-name { text-decoration: underline; }
+  .reg-icon { color: var(--c-olive); font-size: .8em; margin-right: .25em; }
+  .reg-name { color: var(--c-dark); }
+  .reg-count { color: #777; font-size: .9em; margin-left: .35em; }
+  .reg-src { display: inline-block; font-family: system-ui, sans-serif; font-size: .65rem; font-weight: 600; color: #fff; padding: 0 .3em; border-radius: 3px; margin-left: .2em; vertical-align: middle; }
+  .reg-letters { margin: .5rem 0 0 1rem; font-family: system-ui, sans-serif; }
+  .reg-letters .reg-more { margin: .5rem 0; }
+  .reg-letters .reg-open-search { margin-left: .5rem; font-size: .9rem; }
+  @media (max-width: 760px) { .register-entries { column-count: 1; } }
+</style>
+
+<script>window.SITE_BASE = "{{ '' | relative_url }}";</script>
+<script src="{{ '/assets/js/letter-display.js' | relative_url }}?v={{ site.time | date: '%s' }}"></script>
+<script src="{{ '/assets/js/browse.js' | relative_url }}?v={{ site.time | date: '%s' }}"></script>
+<script src="{{ '/assets/js/register.js' | relative_url }}?v={{ site.time | date: '%s' }}"></script>

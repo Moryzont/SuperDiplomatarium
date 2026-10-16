@@ -331,6 +331,74 @@ async function main() {
     console.log(`[stats] done: ${Object.keys(stats).length} collections -> data/v3/collections.json`);
   }
 
+  // 5c. Register pages (/register/): every headword of the editions' registers
+  //     with the letters it is attached to, split by initial letter so a page
+  //     fetches one file. data/v3/register/index.json lists the files and counts.
+  if (wants('register-pages')) {
+    const REG_DIR = path.join(OUT_DIR, 'register');
+    fs.rmSync(REG_DIR, { recursive: true, force: true });
+    fs.mkdirSync(REG_DIR, { recursive: true });
+    const groups = new Map();   // initial -> Map(name|kind -> entry)
+    const initialOf = (name) => {
+      const ch = name.trim().charAt(0).toUpperCase();
+      if (!ch) return '#';
+      if (/[A-ZÆØÅÄÖÞÐ]/.test(ch)) return ch;
+      const base = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '');   // É -> E, Á -> A
+      return /[A-Z]/.test(base) ? base : '#';
+    };
+    for (const [i, r] of loadLetters()) {
+      for (const m of (Array.isArray(r.nevnte) ? r.nevnte : [])) {
+        const name = (m.name || m.text || '').trim();
+        if (!name) continue;
+        const key = `${name}|${m.kind}`;
+        const init = initialOf(name);
+        let g = groups.get(init);
+        if (!g) { g = new Map(); groups.set(init, g); }
+        let e = g.get(key);
+        if (!e) { e = { n: name, k: m.kind, s: new Set(), i: [] }; g.set(key, e); }
+        if (m.source) e.s.add(String(m.source).split(' ')[0]);
+        if (!e.i.includes(i)) e.i.push(i);
+      }
+    }
+    const collator = new Intl.Collator('nb', { sensitivity: 'base' });
+    const index = { generated: new Date().toISOString(), letters: [] };
+    for (const init of [...groups.keys()].sort((a, b) => collator.compare(a, b))) {
+      const entries = [...groups.get(init).values()].map(e => ({ n: e.n, k: e.k, s: [...e.s].sort(), c: e.i.length, i: e.i.sort((a, b) => a - b) }))
+        .sort((a, b) => collator.compare(a.n, b.n) || a.k.localeCompare(b.k));
+      const SPECIAL = { '#': '_', 'Æ': 'AE', 'Ø': 'OE', 'Å': 'AA', 'Ä': 'AE2', 'Ö': 'OE2', 'Þ': 'TH', 'Ð': 'DH' };
+      const file = `${SPECIAL[init] || init}.json`;
+      fs.writeFileSync(path.join(REG_DIR, file), JSON.stringify({ letter: init, entries }));
+      const kinds = { person: 0, place: 0, subject: 0 };
+      for (const e of entries) kinds[e.k] = (kinds[e.k] || 0) + 1;
+      index.letters.push({ letter: init, file, entries: entries.length, kinds });
+    }
+    fs.writeFileSync(path.join(REG_DIR, 'index.json'), JSON.stringify(index));
+    console.log(`[register-pages] done: ${index.letters.length} files, ${index.letters.reduce((a, l) => a + l.entries, 0)} headwords -> data/v3/register/`);
+  }
+
+  // 5d. Timeline (/tidslinje/): letters per year per collection, and the letters
+  //     of each year (global indices, sorted by start date) so a chosen span can
+  //     be listed without the core table.
+  if (wants('timeline')) {
+    const years = {};
+    const byYear = {};
+    const rows = [];
+    for (const [i, r] of loadLetters()) {
+      const [ds] = letterDates(r);
+      if (!ds) continue;
+      const y = Math.floor(ds / 10000);
+      if (y < 700 || y > 1650) continue;
+      const src = r.source || 'unknown';
+      (years[y] || (years[y] = {}))[src] = ((years[y] || {})[src] || 0) + 1;
+      rows.push([y, ds, i]);
+    }
+    rows.sort((a, b) => a[1] - b[1] || a[2] - b[2]);
+    for (const [y, , i] of rows) (byYear[y] || (byYear[y] = [])).push(i);
+    const undated = loadLetters().length ? [...loadLetters()].length - rows.length : 0;
+    fs.writeFileSync(path.join(OUT_DIR, 'timeline.json'), JSON.stringify({ generated: new Date().toISOString(), undated, years, byYear }));
+    console.log(`[timeline] done: ${rows.length} dated letters over ${Object.keys(years).length} years -> data/v3/timeline.json`);
+  }
+
   // 6. Full-record store: data/optimized/full-XX.json, 500 letters per chunk.
   //    Runtime contract: letter at global index i lives in full-{floor(i/500)}.json
   //    and carries its index as `i`. (Replaces the retired optimize-data.js.)
