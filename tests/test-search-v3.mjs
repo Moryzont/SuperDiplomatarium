@@ -161,8 +161,9 @@ async function main() {
     check('DI-only filter respected', r.count > 0 && allDi, `count=${r.count}`);
     await page.click('.letter-card .toggle-details');
     await sleep(2500);
-    const diFooter = await page.$eval('.letter-card .letter-footer', el => el.textContent).catch(() => '');
-    check('DI detail shows the source apparatus', /DI:/.test(diFooter), diFooter.slice(0, 80));
+    // the source paragraph: in the footer when short, in the editorial fold when long (DI's editor introductions)
+    const diSrc = await page.$eval('.letter-card', el => (el.querySelector('.letter-footer')?.textContent || '') + (el.querySelector('details.editorial')?.textContent || '')).catch(() => '');
+    check('DI detail shows the source apparatus', /DI:/.test(diSrc), diSrc.slice(0, 80));
     const diCont = await page.$eval('.letter-card .letter-continuation', el => el.textContent).catch(() => '');
     check('DI detail shows register mentions', /Nevnte:|Mentioned:/.test(diCont), diCont.slice(0, 80));
     const diChips = await page.evaluate(() => {
