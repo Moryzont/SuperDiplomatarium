@@ -83,10 +83,78 @@
     });
   }
 
+  /*
+   * An open entry spans both columns. Left in the column flow (column-span), it
+   * would rebalance everything before it into two new columns, and an entry from
+   * the right column would land far down the page. So the two columns are split
+   * at the entry's row instead: the rows above stay where they are, the entry and
+   * its letters follow at full width, the rest goes on in two columns below.
+   * Closing the entry joins the columns again. One column (phones): no split.
+   */
+  const ONE_COLUMN = window.matchMedia('(max-width: 760px)');
+
+  function makeRows(left, right) {
+    const rows = document.createElement('div');
+    rows.className = 'reg-rows';
+    [left, right].forEach(items => {
+      const col = document.createElement('div');
+      col.className = 'reg-col';
+      col.append(...items);
+      rows.appendChild(col);
+    });
+    return rows;
+  }
+
+  function splitAt(el) {
+    const scope = el.closest('.reg-rows') || entriesEl;
+    const items = [...scope.querySelectorAll('.reg-entry')].filter(x => x !== el && !x.classList.contains('open'));
+    const mid = scope.getBoundingClientRect().left + scope.getBoundingClientRect().width / 2;
+    const colOf = (x) => scope === entriesEl ? (x.getBoundingClientRect().left < mid ? 0 : 1)
+      : [...scope.children].indexOf(x.parentElement);
+    const top = el.getBoundingClientRect().top;
+    const parts = [[], [], [], []];                 // above left, above right, below left, below right
+    items.forEach(x => { parts[(x.getBoundingClientRect().top < top - 1 ? 0 : 2) + colOf(x)].push(x); });
+    el.dataset.col = colOf(el);
+    const above = makeRows(parts[0], parts[1]);
+    const below = makeRows(parts[2], parts[3]);
+    if (scope === entriesEl) {
+      entriesEl.classList.add('split');
+      entriesEl.replaceChildren(above, el, below);
+    } else {
+      scope.replaceWith(above, el, below);
+    }
+  }
+
+  function joinAt(el) {
+    const above = el.previousElementSibling, below = el.nextElementSibling;
+    if (!above?.classList.contains('reg-rows') || !below?.classList.contains('reg-rows')) return;
+    const col = (rows, k) => [...rows.children[k].children];
+    const c = parseInt(el.dataset.col, 10);
+    const joined = makeRows(
+      [...col(above, 0), ...(c === 0 ? [el] : []), ...col(below, 0)],
+      [...col(above, 1), ...(c === 1 ? [el] : []), ...col(below, 1)]);
+    above.replaceWith(joined);                      // the entry itself has moved into the joined columns
+    below.remove();
+    if (entriesEl.children.length === 1) {          // nothing open: back to the plain column flow
+      const all = [...joined.querySelectorAll('.reg-entry')].sort((a, b) => a.dataset.n - b.dataset.n);
+      entriesEl.classList.remove('split');
+      entriesEl.replaceChildren(...all);
+    }
+  }
+
+  // crossing to one column and back: the split goes, the open entries close
+  ONE_COLUMN.addEventListener('change', () => { if (entriesEl.classList.contains('split')) renderEntries(); });
+
   async function toggleEntry(el, list) {
     const e = list[parseInt(el.dataset.n, 10)];
     let box = el.querySelector('.reg-letters');
-    if (box) { box.remove(); el.classList.remove('open'); return; }
+    const head = el.querySelector('.reg-head');
+    if (box) {
+      box.remove(); el.classList.remove('open');
+      if (el.dataset.col !== undefined) { joinAt(el); delete el.dataset.col; head.focus({ preventScroll: true }); }
+      return;
+    }
+    if (!ONE_COLUMN.matches) { splitAt(el); head.focus({ preventScroll: true }); }
     el.classList.add('open');
     box = document.createElement('div');
     box.className = 'reg-letters';

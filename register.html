@@ -40,6 +40,10 @@ permalink: /register/
   .register-entries { column-count: 2; column-gap: 2.5rem; font-family: "EB Garamond", Georgia, "Times New Roman", serif; }
   .reg-entry { break-inside: avoid; margin: 0 0 .15rem; line-height: 1.45; }
   .reg-entry.open { column-span: all; margin: .5rem 0 1rem; }
+  /* an open entry splits the columns at its row (register.js): the same two columns, laid out by hand */
+  .register-entries.split { column-count: 1; }
+  .reg-rows { display: flex; gap: 2.5rem; }
+  .reg-col { flex: 1 1 0; min-width: 0; }
   .reg-head { display: inline; cursor: pointer; }
   .reg-head:hover .reg-name { text-decoration: underline; }
   .reg-icon { color: var(--c-olive); font-size: .8em; margin-right: .25em; }

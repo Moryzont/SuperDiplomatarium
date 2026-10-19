@@ -270,6 +270,22 @@ async function main() {
     const reg = await page.evaluate(() => ({ letters: document.querySelectorAll('#register-letters a').length, entries: document.querySelectorAll('.reg-entry').length, first: document.querySelector('.reg-entry .reg-name')?.textContent || '' }));
     check('register page lists the initial letters', reg.letters >= 25, String(reg.letters));
     check('register page shows the headwords of A', reg.entries > 1000, String(reg.entries));
+    // an entry from the right column opens where it stands, not far down the page
+    const right = await page.evaluate(() => {
+      const box = document.getElementById('register-entries').getBoundingClientRect();
+      const e = [...document.querySelectorAll('.reg-entry')].filter(x => x.getBoundingClientRect().left > box.left + box.width / 2)[8];
+      return e ? { n: e.dataset.n, top: e.getBoundingClientRect().top + scrollY } : null;
+    });
+    if (right) {
+      await page.click(`.reg-entry[data-n="${right.n}"] .reg-head`);
+      await page.waitForSelector(`.reg-entry[data-n="${right.n}"] .letter-card`, { timeout: 30000 }).catch(() => {});
+      const opened = await page.evaluate((n) => document.querySelector(`.reg-entry[data-n="${n}"]`).getBoundingClientRect().top + scrollY, right.n);
+      check('a right-column headword opens at its own row', Math.abs(opened - right.top) < 30, `${Math.round(right.top)} -> ${Math.round(opened)}`);
+      await page.click(`.reg-entry[data-n="${right.n}"] .reg-head`);
+      await sleep(200);
+      const back = await page.evaluate(() => !document.getElementById('register-entries').classList.contains('split') && !document.querySelector('.reg-rows'));
+      check('closing it restores the two columns', back);
+    } else check('a right-column headword opens at its own row', false, 'no entry in the right column');
     await page.click('#register-letters a[data-letter="M"]');
     await page.waitForFunction(() => document.getElementById('register-entries')?.dataset.letter === 'M' && document.querySelectorAll('.reg-entry').length > 100, { timeout: 30000 }).catch(() => {});
     await page.evaluate(() => { const f = document.getElementById('register-filter'); f.value = 'Magnus Eriksson'; f.dispatchEvent(new Event('input')); });
